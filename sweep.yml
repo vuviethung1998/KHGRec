@@ -1,0 +1,18 @@
+program: main.py
+method: grid
+metric:
+  name: max_val_acc
+  goal: maximize
+parameters:
+  lr:
+    values: [0.001, 0.0005, 0.0001, 0.00005]
+  lr_decay:
+    values: [0.95, 0.9, 0.8, 0.6, 0.1]
+  weight_decay:
+    values: [1e-3, 1e-4, 1e-5]
+  input_dim:
+    values: [8,16,32]
+  hyper_dim:
+    values: [32,64,12]
+  neg_slove:
+    values: [0.1, 0.2, 0.4, 0.6]
