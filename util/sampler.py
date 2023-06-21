@@ -3,47 +3,28 @@ import numpy as np
 from util.torch_interface import TorchGraphInterface
 import torch
 
-def next_batch_pairwise_kg(args, data, batch_size, n_negs=1):
-    interaction_data = data
-
-    interaction_mat = interaction_data.normalize_graph_mat(interaction_data.interaction_mat)
-    interaction_mat = TorchGraphInterface.convert_sparse_mat_to_tensor(interaction_mat).cuda()
-    
+def next_batch_pairwise_kg(data, batch_size, n_negs=1):
     training_data = data.training_data
     shuffle(training_data)
-    
-    ptr= 0
-    data_size = len(training_data)  
-
-    max_arity = int(args['max_arity'])
-    n_hop =  int(args['n_hop'])
-    use_hypergraph  = True if args['use_hypergraph'] == 'true' else False 
-
-    ptr= 0
-    data_size = len(training_data)  
-    ripple_set = data.ripple_set
-
+    ptr = 0
+    data_size = len(training_data)
     while ptr < data_size:
         if ptr + batch_size < data_size:
             batch_end = ptr + batch_size
-        else: 
-            batch_end = data_size  
+        else:
+            batch_end = data_size
 
         users = [training_data[idx][0] for idx in range(ptr, batch_end)]
         items = [training_data[idx][1] for idx in range(ptr, batch_end)]
+        entities = []
 
-        item_list= list(data.item.keys())
-        
-        u_idx, i_idx, j_idx = [], [], []
-        memories_h, memories_r, memories_t = [], [], [] 
-        
-        # for i, user in enumerate(users):
-        #     neg_item = random.choice(full_items)
-        #     while neg_item in items:
-        #         neg_item = random.choice(full_items)
-        #     neg_items.append(neg_item)
-        # neg_items = np.array(neg_items)
+        for _, item in enumerate(items):
+            entity_idx = list(data.training_set_i[item].keys())
+            entities  += entity_idx 
 
+        ptr = batch_end
+        u_idx, i_idx, j_idx, e_idx = [], [], [], []
+        item_list = list(data.item.keys())
         for i, user in enumerate(users):
             i_idx.append(data.item[items[i]])
             u_idx.append(data.user[user])
@@ -52,37 +33,16 @@ def next_batch_pairwise_kg(args, data, batch_size, n_negs=1):
                 while neg_item in data.training_set_u[user]:
                     neg_item = choice(item_list)
                 j_idx.append(data.item[neg_item])
-
-        for i in range(n_hop):
-            ts = []
-            ts = [ripple_set[int(u)][i][2] for u in users ]
-            ts = np.array(ts, dtype=int)
-
-            memories_h.append(torch.LongTensor([ripple_set[u][i][0] for u in users]  ))
-            memories_r.append(torch.LongTensor([ripple_set[u][i][1] for u in users ] ))
-            
-            if not use_hypergraph:
-                memories_t.append(torch.LongTensor(ts)) 
-            else:
-                memories_t.append([])
-                for j in range(max_arity):
-                    memories_t[i].append(torch.LongTensor(ts[:,:,j]))
-
-        ptr = batch_end
+        
+        for _, ent in enumerate(entities):
+            e_idx.append(data.entity[ent])
 
         u_idx  = torch.LongTensor(u_idx).cuda()
         i_idx  = torch.LongTensor(i_idx).cuda()
         j_idx  = torch.LongTensor(j_idx).cuda()
+        e_idx = torch.LongTensor(e_idx).cuda()
 
-        memories_h = list(map(lambda x: x.cuda(), memories_h))
-        memories_r = list(map(lambda x: x.cuda(), memories_r))
-
-        if not use_hypergraph:
-            memories_t = list(map(lambda x: x.cuda(), memories_t))
-        else:
-            for i in range(n_hop):
-                memories_t[i] = list(map(lambda x: x.cuda(), memories_t[i]))
-        yield u_idx, i_idx, j_idx, memories_h, memories_r, memories_t
+        yield u_idx, i_idx, j_idx, e_idx
 
 def next_batch_pairwise(data,batch_size,n_negs=1):
     training_data = data.training_data
@@ -168,3 +128,85 @@ def next_batch_sequence(data, batch_size,n_negs=1,max_len=50):
             neg[n,:end]=negatives
         ptr=batch_end
         yield seq, pos, y, neg, np.array(seq_len,np.int)
+
+# def next_batch_pairwise_kg(args, data, batch_size, n_negs=1):
+#     interaction_data = data
+
+#     interaction_mat = interaction_data.normalize_graph_mat(interaction_data.interaction_mat)
+#     interaction_mat = TorchGraphInterface.convert_sparse_mat_to_tensor(interaction_mat).cuda()
+    
+#     training_data = data.training_data
+#     shuffle(training_data)
+    
+#     ptr= 0
+#     data_size = len(training_data)  
+
+#     max_arity = int(args['max_arity'])
+#     n_hop =  int(args['n_hop'])
+#     use_hypergraph  = True if args['use_hypergraph'] == 'true' else False 
+
+#     ptr= 0
+#     data_size = len(training_data)  
+#     ripple_set = data.ripple_set
+
+#     while ptr < data_size:
+#         if ptr + batch_size < data_size:
+#             batch_end = ptr + batch_size
+#         else: 
+#             batch_end = data_size  
+
+#         users = [training_data[idx][0] for idx in range(ptr, batch_end)]
+#         items = [training_data[idx][1] for idx in range(ptr, batch_end)]
+
+#         item_list= list(data.item.keys())
+        
+#         u_idx, i_idx, j_idx = [], [], []
+#         memories_h, memories_r, memories_t = [], [], [] 
+        
+#         # for i, user in enumerate(users):
+#         #     neg_item = random.choice(full_items)
+#         #     while neg_item in items:
+#         #         neg_item = random.choice(full_items)
+#         #     neg_items.append(neg_item)
+#         # neg_items = np.array(neg_items)
+
+#         for i, user in enumerate(users):
+#             i_idx.append(data.item[items[i]])
+#             u_idx.append(data.user[user])
+#             for m in range(n_negs):
+#                 neg_item = choice(item_list)
+#                 while neg_item in data.training_set_u[user]:
+#                     neg_item = choice(item_list)
+#                 j_idx.append(data.item[neg_item])
+
+#         for i in range(n_hop):
+#             ts = []
+#             ts = [ripple_set[int(u)][i][2] for u in users ]
+#             ts = np.array(ts, dtype=int)
+
+#             memories_h.append(torch.LongTensor([ripple_set[u][i][0] for u in users]  ))
+#             memories_r.append(torch.LongTensor([ripple_set[u][i][1] for u in users ] ))
+            
+#             if not use_hypergraph:
+#                 memories_t.append(torch.LongTensor(ts)) 
+#             else:
+#                 memories_t.append([])
+#                 for j in range(max_arity):
+#                     memories_t[i].append(torch.LongTensor(ts[:,:,j]))
+
+#         ptr = batch_end
+
+#         u_idx  = torch.LongTensor(u_idx).cuda()
+#         i_idx  = torch.LongTensor(i_idx).cuda()
+#         j_idx  = torch.LongTensor(j_idx).cuda()
+
+#         memories_h = list(map(lambda x: x.cuda(), memories_h))
+#         memories_r = list(map(lambda x: x.cuda(), memories_r))
+
+#         if not use_hypergraph:
+#             memories_t = list(map(lambda x: x.cuda(), memories_t))
+#         else:
+#             for i in range(n_hop):
+#                 memories_t[i] = list(map(lambda x: x.cuda(), memories_t[i]))
+#         yield u_idx, i_idx, j_idx, memories_h, memories_r, memories_t
+

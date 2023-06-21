@@ -86,7 +86,7 @@ class HCCFModel(nn.Module):
         self._parse_args(config)
 
         init = nn.init.xavier_uniform_
-        adj = self.data.bi_interaction_mat
+        adj = self.data.ui_adj
         self.adj  = TorchGraphInterface.convert_sparse_mat_to_tensor(adj).to(device) 
         
         # init embedding
@@ -123,7 +123,6 @@ class HCCFModel(nn.Module):
             embeds2 = hyperEmbedsLst[i]
             sslLoss += contrastLoss(embeds1[:self.data.user_num], embeds2[:self.data.user_num], torch.unique(ancs), self.temp) + contrastLoss(embeds1[self.data.user_num:], embeds2[self.data.user_num:], torch.unique(poss), self.temp)
         return bprLoss, sslLoss
-
         
     def forward(self, keep_rate):
         uEmbed = self.user_embedding   
@@ -216,3 +215,6 @@ def contrastLoss(embeds1, embeds2, nodes, temp):
 	nume = torch.exp(torch.sum(pckEmbeds1 * pckEmbeds2, dim=-1) / temp)
 	deno = torch.exp(pckEmbeds1 @ pckEmbeds2.T / temp).sum(-1) + 1e-8
 	return -torch.log(nume / deno).mean()
+
+
+

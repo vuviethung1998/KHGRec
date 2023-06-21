@@ -29,7 +29,7 @@ if __name__ == '__main__':
     # model ='MHCN'
     # model  = 'HKGRippleNet'
     # model = 'SSL4Rec'
-    model = 'LightGCN'
+    model = 'HGNN'
     dataset = 'lastfm' 
 
     s = time.time()

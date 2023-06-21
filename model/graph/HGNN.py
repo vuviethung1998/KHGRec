@@ -9,7 +9,7 @@ from os.path import abspath
 import wandb 
 
 from base.graph_recommender import GraphRecommender
-from util.sampler import next_batch_pairwise
+from util.sampler import next_batch_pairwise, next_batch_pairwise_kg
 import torch
 import torch.nn as nn 
 import torch.nn.functional as F
@@ -26,8 +26,8 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class HGNN(GraphRecommender):
-    def __init__(self, conf, training_set, test_set, **kwargs):
-        GraphRecommender.__init__(self, conf, training_set, test_set, **kwargs)
+    def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
+        GraphRecommender.__init__(self, conf, training_set, test_set, knowledge_set, **kwargs)
         # config = OptionConf(self.config['HGNN'])
 
         self.reg_loss = EmbLoss() 
@@ -39,19 +39,16 @@ class HGNN(GraphRecommender):
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay,patience=7)
 
     def _parse_config(self, config):
-        # self.lRate = float(config['learnRate'])
-        self.lRate = wandb.config.lr
-        print(self.lRate)
-        self.lr_decay = wandb.config.lr_decay 
-        # self.lr_decay = float(config['learnRateDecay'])
+        self.lRate = float(config['learnRate'])
+        self.lr_decay = float(config['learnRateDecay'])
         self.maxEpoch = int(config['num.max.epoch'])
         self.batchSize = int(config['batch_size'])
         self.reg = float(config['reg.lambda'])
-        self.embeddingSize = wandb.config.input_dim
-        # self.hyperDim = int(config['hyper.size'])
-        self.hyperDim = wandb.config.hyper_dim  
+        # self.embeddingSize = wandb.config.input_dim
+        self.hyperDim = int(config['hyper.size'])
+        # self.hyperDim = wandb.config.hyper_dim  
         self.dropRate = float(config['dropout'])
-        self.negSlove = wandb.config.neg_slove
+        self.negSlove = float(config['leaky'])
         self.nLayers = int(config['gnn_layer'])
 
     def train(self):
@@ -63,8 +60,8 @@ class HGNN(GraphRecommender):
             rec_losses = []
             reg_losses = []
 
-            for n, batch in enumerate(next_batch_pairwise(self.data, self.batchSize)):
-                user_idx, pos_idx, neg_idx = batch
+            for n, batch in enumerate(next_batch_pairwise_kg(self.data, self.batchSize)):
+                user_idx, pos_idx, neg_idx, entity_idx = batch
                 model.train()
                 # s_model = time.time()
                 rec_user_emb, rec_item_emb = model()

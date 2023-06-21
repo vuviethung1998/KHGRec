@@ -6,10 +6,10 @@ from collections import defaultdict
 import scipy.sparse as sp
 
 class Knowledge(object):
-    def __init__(self, conf, item_dict, testing_set_i, item_num):
+    def __init__(self, conf, knowledge_set,item_dict, testing_set_i, item_num):
         # self.config = config
         print("Loading the dataset {} ....".format(conf['dataset']))
-        self.entity_num, self.relation_num, kg_data = FileIO.load_kg_data(self.config['knowledge.data'])
+        self.entity_num, self.relation_num, kg_data = knowledge_set
         self.kg = self.construct_kg(kg_data)
         self.train_item_set  = set(list(item_dict.keys()))
         self.test_item_set  = testing_set_i
@@ -27,6 +27,7 @@ class Knowledge(object):
         self.item_num = item_num
 
         self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
+        self.kg_ui_adj = self.__create_sparse_knowledge_bipartite_adjacency()
         # print(self.kg_interaction_mat.shape)
 
     def construct_kg(self, kg_np):
@@ -70,13 +71,24 @@ class Knowledge(object):
             col += [self.entity[pair[1]]]
             entries += [1.0]
 
-        # print(self.training_knowledge_data)
-        # print(max(row))
-        # print(max(col))
-
-        # import pdb; pdb.set_trace()
         interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.item_num,self.entity_num),dtype=np.float32)
         return interaction_mat
+
+    def __create_sparse_knowledge_bipartite_adjacency(self, self_connection=False): 
+        '''
+        return a sparse adjacency matrix with the shape (user number + item number, user number + item number)
+        '''
+        n_nodes = self.item_num + self.entity_num 
+        row_idx = [self.item[pair[0]] for pair in self.training_knowledge_data]
+        col_idx = [self.entity[pair[1]] for pair in self.training_knowledge_data]
+        item_np = np.array(row_idx)
+        entity_np = np.array(col_idx)
+        ratings = np.ones_like(item_np, dtype=np.float32)
+        tmp_adj = sp.csr_matrix((ratings, (item_np, entity_np + self.item_num)), shape=(n_nodes, n_nodes),dtype=np.float32)
+        adj_mat = tmp_adj + tmp_adj.T
+        if self_connection:
+            adj_mat += sp.eye(n_nodes)
+        return adj_mat
 
 # class Knowledge:
 #     def __init__(self, config, mode):

@@ -7,7 +7,7 @@ from time import strftime, localtime, time
 
 
 class Recommender(object):
-    def __init__(self, conf, training_set, test_set, **kwargs):
+    def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
         self.config = conf
         self.data = Data(self.config, training_set, test_set)
         self.model_name = self.config['model.name']
@@ -18,6 +18,7 @@ class Recommender(object):
         self.lRate = float(self.config['learnRate'])
         self.lr_decay = float(self.config['learnRateDecay'])
         self.reg = float(self.config['reg.lambda'])
+        self.dataset = self.config['dataset']
         
         if self.config['use.knowledge'] == 'true':
             self.knowledge = True 
@@ -27,9 +28,6 @@ class Recommender(object):
             self.ss_rate = float(self.config['ss_rate'])
         except:
             self.ss_rate = 0.0
-        self.output = f"./results/{self.model_name}/@{self.model_name}-emb:{self.emb_size}-bs:{self.batch_size}-lr:{self.lRate}-lrd:{self.lr_decay}-reg:{self.reg}-ssr:{self.ss_rate}/"
-        if not os.path.exists(self.output):
-            os.makedirs(self.output)
         # self.output = OptionConf(self.config['output.setup'])
         current_time = strftime("%Y-%m-%d %H-%M-%S", localtime(time()))
         self.model_log = Log(self.model_name, self.model_name + ' ' + current_time)

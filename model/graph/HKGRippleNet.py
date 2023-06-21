@@ -412,7 +412,7 @@ class HKGRippleNetKGModel(nn.Module):
         sslLoss = 0 
         uniqUids = torch.unique(uids)
         uniqIids = torch.unique(iids)
-
+            
         for i in range(len(self.hyperUlats)):
             pckHyperULat = self.weight_layers[i](torch.nn.functional.normalize(torch.index_select(self.hyperUlats[i], 0, uniqUids), p=2, dim=1))# @ self.weight_layers[i].weight
             pckGnnULat = torch.nn.functional.normalize(torch.index_select(self.gnnUlats[i], 0, uniqUids), p=2, dim=1)

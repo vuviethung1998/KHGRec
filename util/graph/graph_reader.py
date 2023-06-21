@@ -81,7 +81,7 @@ def load_graph_from_file( base_dir, data_type='lastfm'):
 
 if __name__=="__main__":
     base_dir = '../../dataset/'
-    data_type = 'lastfm'
+    data_type = 'ml-1m'
     load_graph_from_file(base_dir, data_type)
 
     # with open(link_file, "r") as file:

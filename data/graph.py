@@ -1,7 +1,6 @@
 import numpy as np
 import scipy.sparse as sp
 
-
 class Graph(object):
     def __init__(self):
         pass
@@ -22,6 +21,7 @@ class Graph(object):
             d_mat_inv = sp.diags(d_inv)
             norm_adj_mat = d_mat_inv.dot(adj_mat)
         return norm_adj_mat
-
+    
     def convert_to_laplacian_mat(self, adj_mat):
         pass
+    

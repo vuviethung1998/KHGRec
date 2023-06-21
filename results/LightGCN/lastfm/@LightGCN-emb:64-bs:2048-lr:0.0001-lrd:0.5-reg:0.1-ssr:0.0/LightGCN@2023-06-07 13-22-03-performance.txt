@@ -1,0 +1,10 @@
+Top 10
+Hit Ratio:0.08506
+Precision:0.10586
+Recall:0.08551
+NDCG:0.13192
+Top 20
+Hit Ratio:0.1239
+Precision:0.0771
+Recall:0.12462
+NDCG:0.13856
