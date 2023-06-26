@@ -11,8 +11,8 @@ from util.loss_torch import bpr_loss,l2_reg_loss
 # paper: LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation. SIGIR'20
 
 class LightGCN(GraphRecommender):
-    def __init__(self, conf, training_set, test_set):
-        super(LightGCN, self).__init__(conf, training_set, test_set)
+    def __init__(self, conf, training_set, test_set, knowledge_set):
+        super(LightGCN, self).__init__(conf, training_set, test_set, knowledge_set)
         args = OptionConf(self.config['LightGCN'])
         self.n_layers = int(args['-n_layer'])
         self.model = LGCN_Encoder(self.data, self.emb_size, self.n_layers)
