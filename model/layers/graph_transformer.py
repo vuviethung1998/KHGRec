@@ -1,3 +1,24 @@
+# from dgl.nn.pytorch.conv import HGTConv
+# import torch
+# import torch.nn as nn
+# import torch.nn.functional as F
+
+
+# class GraphTransformerLayer(nn.Modul)
+
+# class GraphTransformerEncoder(nn.Module):
+#     def __init__(self, in_dim, out_dim, num_heads, dropout=0.0, layer_norm=False, batch_norm=True, residual=True, use_bias=False, n_layers=1):
+#         super(GraphTransformerEncoder, self).__init__()
+#         self.layers = nn.ModuleList([
+#             GraphTransformerLayer(in_dim, out_dim, num_heads, dropout, layer_norm, batch_norm, residual, use_bias)
+#             for _ in range(n_layers)
+#         ]) 
+    
+#     def forward(self, g, h):
+#         for layer in self.layers:
+#             h = layer(g, h)
+#         return h 
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F 
@@ -20,7 +41,7 @@ def scaled_exp(field, scale_constant):
 
 class MLPReadout(nn.Module):
     def __init__(self, input_dim, output_dim, L=2): #L=nb_hidden_layers
-        super().__init__()
+        super(MLPReadout, self).__init__()
         list_FC_layers = [ nn.Linear( input_dim//2**l , input_dim//2**(l+1) , bias=True ) for l in range(L) ]
         list_FC_layers.append(nn.Linear( input_dim//2**L , output_dim , bias=True ))
         self.FC_layers = nn.ModuleList(list_FC_layers)
@@ -36,7 +57,7 @@ class MLPReadout(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     def  __init__(self, in_dim, out_dim, num_heads, use_bias):
-        super().__init__()
+        super(MultiHeadAttention, self).__init__()
         
         self.out_dim = out_dim
         self.num_heads = num_heads
@@ -75,6 +96,7 @@ class MultiHeadAttention(nn.Module):
 
 class GraphTransformerLayer(nn.Module):
     def __init__(self, in_dim, out_dim, num_heads, dropout=0.0, layer_norm=False, batch_norm=True, residual=True, use_bias=False):
+        super(GraphTransformerLayer, self).__init__()
         self.in_channels = in_dim
         self.out_channels = out_dim
         self.num_heads = num_heads
@@ -99,7 +121,6 @@ class GraphTransformerLayer(nn.Module):
 
         if self.layer_norm:
             self.layer_norm2 = nn.LayerNorm(out_dim)
-            
         if self.batch_norm:
             self.batch_norm2 = nn.BatchNorm1d(out_dim)
 
@@ -116,30 +137,22 @@ class GraphTransformerLayer(nn.Module):
         
         if self.residual:
             h = h_in1 + h # residual connection
-        
         if self.layer_norm:
             h = self.layer_norm1(h)
-            
         if self.batch_norm:
             h = self.batch_norm1(h)
-        
         h_in2 = h # for second residual connection
-        
         # FFN
         h = self.FFN_layer1(h)
         h = F.relu(h)
         h = F.dropout(h, self.dropout, training=self.training)
         h = self.FFN_layer2(h)
-
         if self.residual:
             h = h_in2 + h # residual connection
-        
         if self.layer_norm:
             h = self.layer_norm2(h)
-            
         if self.batch_norm:
-            h = self.batch_norm2(h)       
-
+            h = self.batch_norm2(h)
         return h
 
     def __repr__(self):
@@ -149,6 +162,7 @@ class GraphTransformerLayer(nn.Module):
     
 class GraphTransformerEncoder(nn.Module):
     def __init__(self, in_dim, out_dim, num_heads, dropout=0.0, layer_norm=False, batch_norm=True, residual=True, use_bias=False, n_layers=1):
+        super(GraphTransformerEncoder, self).__init__()
         self.layers = nn.ModuleList([
             GraphTransformerLayer(in_dim, out_dim, num_heads, dropout, layer_norm, batch_norm, residual, use_bias)
             for _ in range(n_layers)

@@ -2,6 +2,122 @@ from random import shuffle,randint,choice,sample
 import numpy as np
 from util.torch_interface import TorchGraphInterface
 import torch
+import random 
+
+def next_batch_pairwise_kg_neg_relation(data, batch_size, n_negs=1):
+    training_data = data.training_data
+    shuffle(training_data)
+
+    ptr = 0
+    data_size = len(training_data)
+    while ptr < data_size:
+        if ptr + batch_size < data_size:
+            batch_end = ptr + batch_size
+        else:
+            batch_end = data_size
+
+        users = [training_data[idx][0] for idx in range(ptr, batch_end)]
+        items = [training_data[idx][1] for idx in range(ptr, batch_end)]
+
+        lst_entities = data.entity.keys()
+        
+        lst_item_entities  =  [] 
+        
+        entities = []
+        for _, item in enumerate(items):
+            entity_idx = list(data.training_set_ie[item].keys())
+            lst_item_entities += [item ] * len(entity_idx)
+            entities += entity_idx 
+
+        # get neg 
+        neg_entities = list(set(lst_entities).difference(set(entities)))
+
+        ptr = batch_end
+        u_idx, i_idx, j_idx, anchor_i_idx, rel_idx ,e_idx, e_idx_neg = [], [], [], [], [], [], []
+        item_list = list(data.item.keys())
+
+        for i, user in enumerate(users):
+            i_idx.append(data.item[items[i]])
+            u_idx.append(data.user[user])
+            for m in range(n_negs):
+                neg_item = choice(item_list)
+                while neg_item in data.training_set_u[user]:
+                    neg_item = choice(item_list)
+                j_idx.append(data.item[neg_item])
+
+        for idx, ent in enumerate(entities):  
+            anchor_i_idx.append(data.item[lst_item_entities[idx]])
+            e_idx.append(data.entity[ent])
+            try:
+                rel_idx.append(data.training_set_ie[lst_item_entities[idx]][ent])
+            except:
+                import pdb; pdb.set_trace()
+            e_idx_neg.append(data.entity[random.choice(neg_entities)])
+
+        u_idx  = torch.LongTensor(u_idx).cuda()
+        i_idx  = torch.LongTensor(i_idx).cuda()
+        j_idx  = torch.LongTensor(j_idx).cuda()
+
+        anchor_i_idx = torch.LongTensor(anchor_i_idx).cuda()
+        rel_idx =  torch.LongTensor(rel_idx).cuda()
+        e_idx = torch.LongTensor(e_idx).cuda()
+        e_idx_neg = torch.LongTensor(e_idx_neg).cuda()
+        yield u_idx, i_idx, j_idx, anchor_i_idx, rel_idx, e_idx, e_idx_neg
+
+
+def next_batch_pairwise_kg_neg(data, batch_size, n_negs=1):
+    training_data = data.training_data
+    shuffle(training_data)
+
+    ptr = 0
+    data_size = len(training_data)
+    while ptr < data_size:
+        if ptr + batch_size < data_size:
+            batch_end = ptr + batch_size
+        else:
+            batch_end = data_size
+
+        users = [training_data[idx][0] for idx in range(ptr, batch_end)]
+        items = [training_data[idx][1] for idx in range(ptr, batch_end)]
+
+        lst_entities = data.entity.keys()
+        
+        lst_item_entities  =  [] 
+        
+        entities = []
+        for _, item in enumerate(items):
+            entity_idx = list(data.training_set_ie[item].keys())
+            lst_item_entities += [item ] * len(entity_idx)
+            entities += entity_idx 
+
+        # get neg 
+        neg_entities = list(set(lst_entities).difference(set(entities)))
+
+        ptr = batch_end
+        u_idx, i_idx, j_idx, anchor_i_idx ,e_idx, e_idx_neg = [], [], [], [], [], []
+        item_list = list(data.item.keys())
+
+        for i, user in enumerate(users):
+            i_idx.append(data.item[items[i]])
+            u_idx.append(data.user[user])
+            for m in range(n_negs):
+                neg_item = choice(item_list)
+                while neg_item in data.training_set_u[user]:
+                    neg_item = choice(item_list)
+                j_idx.append(data.item[neg_item])
+
+        for idx, ent in enumerate(entities):  
+            anchor_i_idx.append(data.item[lst_item_entities[idx]])
+            e_idx.append(data.entity[ent])
+            e_idx_neg.append(data.entity[random.choice(neg_entities)])
+            
+        u_idx  = torch.LongTensor(u_idx).cuda()
+        i_idx  = torch.LongTensor(i_idx).cuda()
+        j_idx  = torch.LongTensor(j_idx).cuda()
+        anchor_i_idx = torch.LongTensor(anchor_i_idx).cuda()
+        e_idx = torch.LongTensor(e_idx).cuda()
+        e_idx_neg = torch.LongTensor(e_idx_neg).cuda()
+        yield u_idx, i_idx, j_idx, anchor_i_idx, e_idx, e_idx_neg
 
 def next_batch_pairwise_kg(data, batch_size, n_negs=1):
     training_data = data.training_data
@@ -52,7 +168,7 @@ def next_batch_pairwise(data,batch_size,n_negs=1):
     while ptr < data_size:
         if ptr + batch_size < data_size:
             batch_end = ptr + batch_size
-        else:
+        else:   
             batch_end = data_size
         users = [training_data[idx][0] for idx in range(ptr, batch_end)]
         items = [training_data[idx][1] for idx in range(ptr, batch_end)]

@@ -71,11 +71,6 @@ class RippleNet(GraphRecommender):
 
                 train_losses.append(batch_loss.item())
 
-                # --------------------hccf + ripple----------------------------
-                # if n % 100 == 0 and n > 0:
-                #     print('training:', epoch + 1, 'batch', n, 'rec_loss:', rec_loss.item(),'reg_loss', reg_loss.item(), 'kge_loss', kge_loss.item() )
-                # --------------------------------------------------------------
-            
             batch_train_loss = np.mean(train_losses)
             scheduler.step(batch_train_loss)
 
@@ -101,7 +96,7 @@ class RippleNet(GraphRecommender):
 
     def save(self, kwargs=None):
         with torch.no_grad():
-            # --------------------hccf + ripple----------------------------
+            #--------------------hccf + ripple----------------------------
             self.best_user_emb, self.best_item_emb, _, _, _ = self.model(kwargs, keep_rate=1)
             #------------------------------------------------------------
 

@@ -11,6 +11,7 @@ class Knowledge(object):
         print("Loading the dataset {} ....".format(conf['dataset']))
         self.entity_num, self.relation_num, kg_data = knowledge_set
         self.kg = self.construct_kg(kg_data)
+        # import pdb; pdb.set_trace()
         self.train_item_set  = set(list(item_dict.keys()))
         self.test_item_set  = testing_set_i
         self.training_knowledge_data  =  []
@@ -18,7 +19,7 @@ class Knowledge(object):
         self.entity = {}
         self.id2ent = {}
         self.training_set_e = defaultdict(dict)
-        self.training_set_i = defaultdict(dict)
+        self.training_set_ie = defaultdict(dict)
         self.test_set_entity = defaultdict(dict)
         self.__generate_set()
 
@@ -44,11 +45,11 @@ class Knowledge(object):
                 tail, rel = ent
                 if tail not in self.entity:
                     self.entity[tail] = len(self.entity)
-                    self.id2ent[self.entity[tail]] = tail
-        
-                self.training_set_i[it][tail] = rel 
+                    self.id2ent[self.entity[tail]] = tail 
+                self.training_set_ie[it][tail] = rel 
                 self.training_set_e[tail][it] = rel 
-                self.training_knowledge_data.append((it, tail))
+
+                self.training_knowledge_data.append([it, tail, rel])
 
         for it in list(self.test_item_set):
             for ent in self.kg[it]:

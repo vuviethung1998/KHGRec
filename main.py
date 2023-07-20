@@ -30,7 +30,6 @@ if __name__ == '__main__':
     # model  = 'HKGRippleNet'
     # model = 'SSL4Rec'
     model = 'LightGCN'
-    dataset = 'lastfm' 
 
     s = time.time()
     if model in graph_baselines or model in ssl_graph_models or model in sequential_baselines or model in ssl_sequential_models:

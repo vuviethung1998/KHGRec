@@ -11,6 +11,7 @@ class GraphAugmentor(object):
     def node_dropout(sp_adj, drop_rate):
         """Input: a sparse adjacency matrix and a dropout rate."""
         adj_shape = sp_adj.get_shape()
+        # print(adj_shape)
         row_idx, col_idx = sp_adj.nonzero()
         drop_user_idx = random.sample(range(adj_shape[0]), int(adj_shape[0] * drop_rate))
         drop_item_idx = random.sample(range(adj_shape[1]), int(adj_shape[1] * drop_rate))

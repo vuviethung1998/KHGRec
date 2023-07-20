@@ -1,5 +1,6 @@
 import time
 import sys
+import os
 from os.path import abspath
 import torch 
 import numpy as np 
@@ -20,8 +21,13 @@ class GraphRecommender(Recommender):
         self.bestPerformance = []
         top = self.ranking['-topN'].split(',')
         self.topN = [int(num) for num in top]
-        self.max_N = max(self.topN)
-        
+        self.max_N = max(self.topN)        
+        if conf['model.name'] == 'HGNN':
+            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-inp_emb:{conf['input.size']}-hyper_emb:{conf['hyper.size']}-bs:{conf['batch_size']}-lr:{conf['learnRate']}-lrd:{conf['learnRateDecay']}-reg:{conf['reg.lambda']}-leaky:{conf['leaky']}-dropout:{conf['dropout']}-n_layers:{conf['gnn_layer']}-temp:{conf['temp']}-cl_rate:{conf['cl_rate']}/"
+        else:
+            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-bs:{conf['batch_size']}-lr:{conf['learnRate']}-lrd:{conf['learnRateDecay']}-reg:{conf['reg.lambda']}-n_layers:{conf['gnn_layer']}"
+        if not os.path.exists(self.output):
+            os.makedirs(self.output)
 
     def print_model_info(self):
         super(GraphRecommender, self).print_model_info()
@@ -86,10 +92,12 @@ class GraphRecommender(Recommender):
         # output prediction result
         out_dir = self.output
         # out_dir = self.output['-dir']
-        file_name = self.config['model.name'] + '@' + current_time + '-top-' + str(self.max_N) + 'items' + '.txt'
+        # file_name = self.config['model.name'] + '@' + current_time + '-top-' + str(self.max_N) + 'items' + '.txt'
+        file_name = self.config['model.name'] + '-top-' + str(self.max_N) + 'items' + '.txt'
         FileIO.write_file(out_dir, file_name, self.recOutput)
         print('The result has been output to ', abspath(out_dir), '.')
-        file_name = self.config['model.name'] + '@' + current_time + '-performance' + '.txt'
+        # file_name = self.config['model.name'] + '@' + current_time + '-performance' + '.txt'
+        file_name = self.config['model.name'] + '-performance' + '.txt'
         self.result = ranking_evaluation(self.data.test_set, rec_list, self.topN)
         self.model_log.add('###Evaluation Results###')
         self.model_log.add(self.result)
@@ -175,14 +183,18 @@ class GraphRecommender(Recommender):
         weight_file = out_dir + '/' + file_name 
         torch.save(model.state_dict(), weight_file)
 
-    def save_loss(self, train_losses, rec_losses, reg_losses):
+    def save_loss(self, train_losses, rec_losses, reg_losses, cl_losses=None):
         df_train_loss = pd.DataFrame(train_losses, columns = ['ep', 'loss'])
         df_rec_loss = pd.DataFrame(rec_losses, columns = ['ep', 'loss'])
         df_reg_loss = pd.DataFrame(reg_losses, columns = ['ep', 'loss'])
-        
+
         df_train_loss.to_csv(self.output + '/train_loss.csv')
         df_rec_loss.to_csv(self.output + '/rec_loss.csv')
         df_reg_loss.to_csv(self.output + '/reg_loss.csv')
+
+        if not cl_losses:
+            df_cl_loss = pd.DataFrame(cl_losses, columns= ['ep', 'loss'])
+            df_cl_loss.to_csv(self.output + '/cl_loss.csv')
 
     def save_perfomance_training(self, log_train):
         df_train_log = pd.DataFrame(log_train)

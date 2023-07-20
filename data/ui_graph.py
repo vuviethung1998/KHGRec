@@ -29,6 +29,7 @@ class Interaction(Data,Graph, Knowledge):
 
         self.test_set_item = set()
         self.__generate_set()
+
         self.user_num = len(self.training_set_u)
         self.item_num = len(self.training_set_i) 
         self.ui_adj = self.__create_sparse_bipartite_adjacency()

@@ -12,8 +12,8 @@ from data.augmentor import GraphAugmentor
 
 
 class SGL(GraphRecommender):
-    def __init__(self, conf, training_set, test_set):
-        super(SGL, self).__init__(conf, training_set, test_set)
+    def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
+        super(SGL, self).__init__(conf, training_set, test_set, knowledge_set, **kwargs)
         args = OptionConf(self.config['SGL'])
         self.cl_rate = float(args['-lambda'])
         aug_type = self.aug_type = int(args['-augtype'])
@@ -36,6 +36,7 @@ class SGL(GraphRecommender):
                 cl_loss = self.cl_rate * model.cal_cl_loss([user_idx,pos_idx],dropped_adj1,dropped_adj2)
                 batch_loss =  rec_loss + l2_reg_loss(self.reg, user_emb, pos_item_emb,neg_item_emb) + cl_loss
                 # Backward and optimize
+
                 optimizer.zero_grad()
                 batch_loss.backward()
                 optimizer.step()
@@ -55,7 +56,6 @@ class SGL(GraphRecommender):
         u = self.data.get_user_id(u)
         score = torch.matmul(self.user_emb[u], self.item_emb.transpose(0, 1))
         return score.cpu().numpy()
-
 
 class SGL_Encoder(nn.Module):
     def __init__(self, data, emb_size, drop_rate, n_layers, temp, aug_type):
@@ -100,6 +100,7 @@ class SGL_Encoder(nn.Module):
         ego_embeddings = torch.cat([self.embedding_dict['user_emb'], self.embedding_dict['item_emb']], 0)
         all_embeddings = [ego_embeddings]
         for k in range(self.n_layers):
+
             if perturbed_adj is not None:
                 if isinstance(perturbed_adj,list):
                     ego_embeddings = torch.sparse.mm(perturbed_adj[k], ego_embeddings)

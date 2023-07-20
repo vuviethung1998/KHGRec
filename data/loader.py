@@ -3,7 +3,6 @@ from os import remove
 from re import split
 import numpy as np 
 import pandas as pd 
-import collections
 
 class FileIO(object):
     def __init__(self):
@@ -22,34 +21,28 @@ class FileIO(object):
             remove(file_path)
 
     @staticmethod
-    def load_data_set(file, rec_type):
-        if rec_type == 'graph':
-            data = []
-            with open(file) as f:
-                for line in f:
-                    items = split('\t', line.strip())
-                    user_id = int(items[0])
-                    item_id = int(items[1])
-                    weight = float(items[2])
-                    data.append([user_id, item_id, float(weight)])
-
-        if rec_type == 'sequential':
-            data = {}
-            with open(file) as f:
-                for line in f:
-                    items = split(':', line.strip())
-                    seq_id = items[0]
-                    data[seq_id]=items[1].split()
+    def load_data_set(file, rec_type='graph'):
+        _, _, _, data = load_cf(file)
+        # data = []
+        # with open(file) as f:
+        #     for line in f:
+        #         items = split('\t', line.strip())
+        #         user_id = int(items[0])
+        #         item_id = int(items[1])
+        #         weight = float(items[2])
+        #         data.append([user_id, item_id, float(weight)])
         return data
 
     @staticmethod
     def load_user_list(file):
-        user_list = []
-        print('loading user List...')
-        with open(file) as f:
-            for line in f:
-                user_list.append(line.strip().split()[0])
-        return user_list
+        # user_list = []
+        # print('loading user List...')
+        # with open(file) as f:
+        #     for line in f:
+        #         user_list.append(line.strip().split()[0])
+        # return user_list
+        user, _, _, _ = load_cf(file)
+        return user 
 
     @staticmethod
     def load_social_data(file):
@@ -68,11 +61,42 @@ class FileIO(object):
         return social_data
     
     @staticmethod 
-    def load_kg_data(file):
-        _, kg_np = construct_kg(file)
-        n_entity = len(set(kg_np[:, 2]))
-        n_relation = len(set(kg_np[:, 1])) 
+    def load_kg_data(filename):
+        # load Kg from file 
+        kg_data = pd.read_csv(filename, sep=' ', names=['h', 'r', 't'], engine='python')
+        kg_data = kg_data.drop_duplicates()
+        kg_np = kg_data.to_numpy()
+        n_entity = len(set(kg_np[:, 0]) & set(kg_np[:, 2]))
+        n_relation = len(set(kg_np[:, 1]))
         return n_entity, n_relation, kg_np
+
+def load_cf(filename):
+    # load user and item from file 
+    user = []
+    item = []
+    user_dict = dict()
+
+    lines = open(filename, 'r').readlines()
+
+    data = [] 
+    for l in lines:
+        tmp = l.strip()
+        inter = [int(i) for i in tmp.split()]
+
+        if len(inter) > 1:
+            user_id, item_ids = inter[0], inter[1:]
+            item_ids = list(set(item_ids))
+
+            for item_id in item_ids:
+                user.append(user_id)
+                item.append(item_id)
+                data.append([user_id, item_id, 1.0])
+
+            user_dict[user_id] = item_ids
+    user = np.array(user, dtype=np.int32)
+    item = np.array(item, dtype=np.int32)
+    
+    return user, item, user_dict, data 
 
 def construct_kg(file):
     datas = [] 
