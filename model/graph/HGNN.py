@@ -37,8 +37,8 @@ class HGNN(GraphRecommender):
 
         self._parse_config(self.config)
         self.model.to(device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), weight_decay=1e-3, lr=self.lRate)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay,patience=7)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lRate)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay,patience=5)
 
     def _parse_config(self, config):
         self.model_name = config['model.name']
@@ -115,6 +115,11 @@ class HGNN(GraphRecommender):
             self.fast_evaluation(ep)
             e_eval = time.time()
             print("Eval time: %f s" % (e_eval - s_eval))
+        
+            del dropped_adj1
+            del dropped_adj2
+
+
         self.save_loss(final_train_losses, final_rec_losses, final_reg_losses, final_cl_losses)
         self.user_emb, self.item_emb = self.best_user_emb, self.best_item_emb
 
@@ -148,14 +153,14 @@ class HGNNModel(nn.Module):
         
         self.fc_u = nn.Linear(self.input_dim, self.hyper_dim)
         self.fc_i = nn.Linear(self.input_dim, self.hyper_dim)
-        self.fc_e = nn.Linear(self.input_dim, self.hyper_dim)
         
-        self.hgnn_u =  HGNNConv(leaky=self.p, input_dim=self.hyper_dim, hyper_dim=self.hyper_dim)
-        self.hgnn_i = HGNNConv(leaky=self.p, input_dim=self.hyper_dim, hyper_dim=self.hyper_dim)
-        self.hgnn_e = HGNNConv(leaky=self.p, input_dim=self.hyper_dim, hyper_dim=self.hyper_dim)
+        self.hgnn_u =  [HGNNConv(leaky=self.p, input_dim=self.hyper_dim, hyper_dim=self.hyper_dim) for _ in range(self.n_layers)]
+        self.hgnn_i = [ HGNNConv(leaky=self.p, input_dim=self.hyper_dim, hyper_dim=self.hyper_dim) for _ in range(self.n_layers)]
         
         self.non_linear = nn.ReLU()
         self.dropout = nn.Dropout(self.drop_rate)
+
+        self.apply(xavier_uniform_initialization)
         
     def _parse_args(self, config):
 
@@ -164,11 +169,9 @@ class HGNNModel(nn.Module):
         self.maxEpoch = int(config['num.max.epoch'])
         self.batchSize = int(config['batch_size'])
         self.reg = float(config['reg.lambda'])
-        # self.embeddingSize = wandb.config.input_dim
         self.hyper_dim = int(config['hyper.size'])
         self.input_dim = int(config['input.size'])
 
-        # self.hyperDim = wandb.config.hyper_dim  
         self.drop_rate = float(config['dropout'])
         self.p = float(config['leaky'])
         self.n_layers = int(config['gnn_layer'])
@@ -197,7 +200,6 @@ class HGNNModel(nn.Module):
         embedding_dict = nn.ParameterDict({
             'user_emb': nn.Parameter(initializer(torch.empty(self.data.user_num, self.input_dim)).to(device)),
             'item_emb': nn.Parameter(initializer(torch.empty(self.data.item_num, self.input_dim)).to(device))
-            # 'entity_emb': nn.Parameter(initializer(torch.empty(self.data.entity_num, self.input_dim)).to(device))
         })
         return embedding_dict
 
@@ -228,17 +230,23 @@ class HGNNModel(nn.Module):
         
         for k in range(self.n_layers):
             # ego_embeddings = torch.sparse.mm(self.sparse_norm_adj, ego_embeddings)
-            hyperULat = self.hgnn_u(self.adj, uEmbed)
-            hyperILat = self.hgnn_i(self.adj.T, iEmbed)
             
+            if perturbed_adj is not None:
+                if isinstance(perturbed_adj, list):
+                    hyperULat = self.hgnn_u[k](perturbed_adj[k], uEmbed)
+                    hyperILat = self.hgnn_i[k](perturbed_adj[k].T, iEmbed)
+                else:
+                    hyperULat = self.hgnn_u[k](perturbed_adj, uEmbed)
+                    hyperILat = self.hgnn_i[k](perturbed_adj.T, iEmbed)
+            else:
+                hyperULat = self.hgnn_u[k](self.adj, uEmbed)
+                hyperILat = self.hgnn_i[k](self.adj.T, iEmbed)
             ego_embeddings = torch.cat([hyperULat, hyperILat], dim=0)
             all_embeddings += [ego_embeddings]
-            
         all_embeddings = torch.stack(all_embeddings, dim=1)
         all_embeddings = torch.mean(all_embeddings, dim=1)
         user_all_embeddings = all_embeddings[:self.data.user_num]
         item_all_embeddings = all_embeddings[self.data.user_num:self.data.user_num+ self.data.item_num]
-        
         return user_all_embeddings, item_all_embeddings
 
 class HGNNConv(nn.Module):

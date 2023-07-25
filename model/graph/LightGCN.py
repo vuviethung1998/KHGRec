@@ -93,8 +93,8 @@ class LGCN_Encoder(nn.Module):
     def _init_model(self):
         initializer = nn.init.xavier_uniform_
         embedding_dict = nn.ParameterDict({
-            'user_emb': nn.Parameter(initializer(torch.empty(self.data.user_num, self.latent_size))),
-            'item_emb': nn.Parameter(initializer(torch.empty(self.data.item_num, self.latent_size))),
+            'user_emb': nn.Parameter(initializer(torch.empty(self.data.n_users, self.latent_size))),
+            'item_emb': nn.Parameter(initializer(torch.empty(self.data.n_items, self.latent_size))),
         })
         return embedding_dict
 
@@ -106,8 +106,8 @@ class LGCN_Encoder(nn.Module):
             all_embeddings += [ego_embeddings]
         all_embeddings = torch.stack(all_embeddings, dim=1)
         all_embeddings = torch.mean(all_embeddings, dim=1)
-        user_all_embeddings = all_embeddings[:self.data.user_num]
-        item_all_embeddings = all_embeddings[self.data.user_num:]
+        user_all_embeddings = all_embeddings[:self.data.n_users]
+        item_all_embeddings = all_embeddings[self.data.n_users:]
         return user_all_embeddings, item_all_embeddings
 
 

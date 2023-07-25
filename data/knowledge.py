@@ -1,62 +1,81 @@
 import numpy as np
+import pandas as pd 
 from data.loader import FileIO
 import collections  
 from collections import defaultdict
-
+import torch
 import scipy.sparse as sp
 
-class Knowledge(object):
-    def __init__(self, conf, knowledge_set,item_dict, testing_set_i, item_num):
-        # self.config = config
-        print("Loading the dataset {} ....".format(conf['dataset']))
-        self.entity_num, self.relation_num, kg_data = knowledge_set
-        self.kg = self.construct_kg(kg_data)
-        # import pdb; pdb.set_trace()
-        self.train_item_set  = set(list(item_dict.keys()))
-        self.test_item_set  = testing_set_i
-        self.training_knowledge_data  =  []
-        self.item = item_dict
+from data.ui_graph import Interaction 
+
+class Knowledge(Interaction):
+    def __init__(self, conf,  training, test, knowledge):
+        super(Knowledge, self).__init__(conf,  training, test, knowledge)
+        self.conf = conf    
+
         self.entity = {}
         self.id2ent = {}
         self.training_set_e = defaultdict(dict)
-        self.training_set_ie = defaultdict(dict)
-        self.test_set_entity = defaultdict(dict)
-        self.__generate_set()
 
-        # print(self.training_set_e)
-        self.entity_num = len(self.training_set_e)
-        self.item_num = item_num
+        self.construct_data(knowledge)
 
+        self.n_entities = len(self.training_set_e)
         self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
-        self.kg_ui_adj = self.__create_sparse_knowledge_bipartite_adjacency()
-        # print(self.kg_interaction_mat.shape)
 
-    def construct_kg(self, kg_np):
-        print('constructing knowledge graph ...')
-        kg = collections.defaultdict(list)
-        for head, relation, tail in kg_np:
-            head, relation, tail = int(head),int(relation), int(tail)
-            kg[head].append((tail, relation))
-        return kg
+    def construct_data(self, kg_data):
+        n_relations = max(kg_data['r']) + 1
+        inverse_kg_data = kg_data.copy()
+        inverse_kg_data = inverse_kg_data.rename({'h': 't', 't': 'h'}, axis='columns')
+        inverse_kg_data['r'] += n_relations
+        self.kg_train_data = pd.concat([kg_data, inverse_kg_data], axis=0, ignore_index=True, sort=False)
 
-    def __generate_set(self):
-        for it in list(self.train_item_set):
-            for ent in self.kg[it]:
-                tail, rel = ent
-                if tail not in self.entity:
-                    self.entity[tail] = len(self.entity)
-                    self.id2ent[self.entity[tail]] = tail 
-                self.training_set_ie[it][tail] = rel 
-                self.training_set_e[tail][it] = rel 
+        # self.kg_train_data = pd.concat([kg_data, cf2kg_train_data, inverse_cf2kg_train_data], ignore_index=True)
+        self.n_kg_train = len(self.kg_train_data)
 
-                self.training_knowledge_data.append([it, tail, rel])
+        self.n_users_entities = self.n_users + self.n_entities
 
-        for it in list(self.test_item_set):
-            for ent in self.kg[it]:
-                tail, rel = ent
-                if  tail not in self.entity:
-                    continue 
-                self.test_set_entity[it][tail] = rel
+        self.cf_train_data = (np.array(list(map(lambda d: d + self.n_entities, self.cf_train_data[0]))).astype(np.int32), self.cf_train_data[1].astype(np.int32))
+        self.cf_test_data = (np.array(list(map(lambda d: d + self.n_entities, self.cf_test_data[0]))).astype(np.int32), self.cf_test_data[1].astype(np.int32))
+
+        self.train_user_dict = {k + self.n_entities: np.unique(v).astype(np.int32) for k, v in self.train_user_dict.items()}
+        self.test_user_dict = {k + self.n_entities: np.unique(v).astype(np.int32) for k, v in self.test_user_dict.items()}
+
+        # add interactions to kg data
+        cf2kg_train_data = pd.DataFrame(np.zeros((self.n_cf_train, 3), dtype=np.int32), columns=['h', 'r', 't'])
+        cf2kg_train_data['h'] = self.cf_train_data[0]
+        cf2kg_train_data['t'] = self.cf_train_data[1]
+
+        inverse_cf2kg_train_data = pd.DataFrame(np.ones((self.n_cf_train, 3), dtype=np.int32), columns=['h', 'r', 't'])
+        inverse_cf2kg_train_data['h'] = self.cf_train_data[1]
+        inverse_cf2kg_train_data['t'] = self.cf_train_data[0]
+
+        self.kg_train_data = pd.concat([kg_data, cf2kg_train_data, inverse_cf2kg_train_data], ignore_index=True)
+
+        # construct kg dict
+        h_list = []
+        t_list = []
+        r_list = []
+
+        self.train_kg_dict = collections.defaultdict(list)
+        self.train_relation_dict = collections.defaultdict(list)
+
+        for row in self.kg_train_data.iterrows():
+            h, r, t = row
+            h_list.append(h)
+            t_list.append(t)
+            r_list.append(r)
+
+            if t not in self.entity:
+                self.entity[t] = len(self.entity)
+                self.id2ent[self.entity[t]] = t 
+            self.training_set_e[t][h] = r
+
+            self.train_kg_dict[h].append((t, r))
+            self.train_relation_dict[r].append((h, t))
+
+        self.h_list = torch.LongTensor(h_list)
+        self.t_list = torch.LongTensor(t_list)
+        self.r_list = torch.LongTensor(r_list)
 
     def get_entity_id(self, e):
         if e in self.entity:
@@ -64,154 +83,98 @@ class Knowledge(object):
 
     def __create_sparse_knowledge_interaction_matrix(self):
         """
-            return a sparse adjacency matrix with the shape (user number, item number)
+            return a sparse adjacency matrix with the shape (entity number, entity number)
         """
         row, col, entries = [], [], []
-        for pair in self.training_knowledge_data:
-            row += [self.item[pair[0]]]
-            col += [self.entity[pair[1]]]
+        for pair in self.kg_train_data.iterrows():
+            row += [self.entity[pair[0]]]
+            col += [self.entity[pair[2]]]
             entries += [1.0]
 
-        interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.item_num,self.entity_num),dtype=np.float32)
+        interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.entity_num, self.entity_num),dtype=np.float32)
         return interaction_mat
 
-    def __create_sparse_knowledge_bipartite_adjacency(self, self_connection=False): 
-        '''
-        return a sparse adjacency matrix with the shape (user number + item number, user number + item number)
-        '''
-        n_nodes = self.item_num + self.entity_num 
-        row_idx = [self.item[pair[0]] for pair in self.training_knowledge_data]
-        col_idx = [self.entity[pair[1]] for pair in self.training_knowledge_data]
-        item_np = np.array(row_idx)
-        entity_np = np.array(col_idx)
-        ratings = np.ones_like(item_np, dtype=np.float32)
-        tmp_adj = sp.csr_matrix((ratings, (item_np, entity_np + self.item_num)), shape=(n_nodes, n_nodes),dtype=np.float32)
-        adj_mat = tmp_adj + tmp_adj.T
-        if self_connection:
-            adj_mat += sp.eye(n_nodes)
-        return adj_mat
-
-# class Knowledge:
-#     def __init__(self, config, mode):
+# class Knowledge(object):
+#     def __init__(self, conf, knowledge_set,item_dict, testing_set_i, item_num):
 #         # self.config = config
-#         self.mode= mode 
-#         self.batch_size = config['kg_batchsize']
-#         self.neg_ratio = config['neg_ratio']
-        
-#         self.batch_index = 0
-#         self.ent2id = {"":0}
-#         self.rel2id = {"":0}
-#         print("Loading the dataset {} ....".format(config['ds_name']))
-#         self.n_entities, self.n_relations, self.kg_data, self.khg_data, self.max_arity = FileIO.load_kg_data(self.config['knowledge.data'])
-#         # shuffle dataset
-#         np.random.shuffle(self.kg_data)
-#         np.random.shuffle(self.khg_data)
-#         # if hypergraph or graph 
-#         # self.max_arity = config['max_arity'] # 8
-        
-#     def num_rel(self):
-#         return self.n_relations 
-    
-#     def num_ent(self):
-#         return self.n_entities
-    
-#     def tuple2ids(self, tuple_):
-#         output = np.zeros(self.max_arity + 1)
-#         for ind,t in enumerate(tuple_):
-#             if ind == 0:
-#                 output[ind] = self.get_rel_id(t)
-#             else:
-#                 output[ind] = self.get_ent_id(t)
-#         return output
-    
-#     def get_ent_id(self, ent):
-#         if not ent in self.ent2id:
-#             self.ent2id[ent] = len(self.ent2id)
-#         return self.ent2id[ent]
-    
-#     def get_rel_id(self, rel):
-#         if not rel in self.rel2id:
-#             self.rel2id[rel] = len(self.rel2id)
-#         return self.rel2id[rel]
-    
-#     def next_pos_batch(self):
-#         batch_size = self.batch_size
-#         if self.batch_index + batch_size < len(self.kg_data):
-#             batch = self.kg_data[self.batch_index: self.batch_index+batch_size]
-#             self.batch_index += batch_size
-#         else:
-#             batch = self.kg_data[self.batch_index:]
-#             ###shuffle##
-#             np.random.shuffle(self.kg_data)
-#             self.batch_index = 0
-#         batch = np.append(batch, np.zeros((len(batch), 1)), axis=1).astype("int") #appending the +1 label
-#         batch = np.append(batch, np.zeros((len(batch), 1)), axis=1).astype("int") #appending the 0 arity
-#         return batch
-    
-#     def next_batch(self):
-#         mode = self.mode 
-        
-#         if mode == 'kg':
-#             pos_batch = self.next_pos_batch()
-#             batch = self.generate_neg(pos_batch, self.neg_ratio)
-#             arities = batch[:,4]
-#             ms = np.zeros((len(batch),3))
-#             bs = np.ones((len(batch), 3))
-#             for i in range(len(batch)):
-#                 ms[i][0:arities[i]] = 1
-#                 bs[i][0:arities[i]] = 0
-#             r = torch.tensor(batch[:,1]).long().to(self.device)
-#             e1 = torch.tensor(batch[:,0]).long().to(self.device)
-#             e2 = torch.tensor(batch[:,2]).long().to(self.device)
-#             labels = batch[:,3]
-#             return r, e1, e2          
-        
-#         elif mode == 'khg':
-#             pos_batch = self.next_pos_batch()
-#             batch = self.generate_neg(pos_batch, self.neg_ratio)
-             
-#             arities = batch[:,10]
-#             ms = np.zeros((len(batch),self.max_arity))
-#             bs = np.ones((len(batch), 9))
-#             for i in range(len(batch)):
-#                 ms[i][0:arities[i]] = 1
-#                 bs[i][0:arities[i]] = 0
-#             r  = torch.tensor(batch[:,1]).long().to(self.device)
-#             e1 = torch.tensor(batch[:,0]).long().to(self.device)
-#             e2 = torch.tensor(batch[:,2]).long().to(self.device)
-#             e3 = torch.tensor(batch[:,3]).long().to(self.device)
-#             e4 = torch.tensor(batch[:,4]).long().to(self.device)
-#             e5 = torch.tensor(batch[:,5]).long().to(self.device)
-#             e6 = torch.tensor(batch[:,6]).long().to(self.device)
-#             e7 = torch.tensor(batch[:,7]).long().to(self.device)
-#             e8 = torch.tensor(batch[:,8]).long().to(self.device)
-#             e9= torch.tensor(batch[:,9]).long().to(self.device)
-#             labels = batch[:,10]
-            
-#             ms = torch.tensor(ms).float().to(self.device)
-#             bs = torch.tensor(bs).float().to(self.device)
-#             return r, e1, e2, e3, e4, e5, e6, e7, e8, e9, labels, ms, bs
-            
+#         print("Loading the dataset {} ....".format(conf['dataset']))
+#         self.entity_num, self.relation_num, kg_data = knowledge_set
+#         self.kg = self.construct_kg(kg_data)
+#         # import pdb; pdb.set_trace()
+#         self.train_item_set  = set(list(item_dict.keys()))
+#         self.test_item_set  = testing_set_i
+#         self.training_knowledge_data  =  []
+#         self.item = item_dict
+#         self.entity = {}
+#         self.id2ent = {}
+#         self.training_set_e = defaultdict(dict)
+#         self.training_set_ie = defaultdict(dict)
+#         self.test_set_entity = defaultdict(dict)
+#         self.__generate_set()
 
-#     def generate_neg(self, pos_batch, neg_ratio): # chua hieu lam
-#         mode = self.mode 
-#         if mode == 'kg': 
-#             arities = [8 - (t == 0).sum() for t in pos_batch]
-#             pos_batch[:,-1] = arities
-#             neg_batch = np.concatenate([self.neg_each(np.repeat([c], neg_ratio * arities[i] + 1, axis=0), arities[i], neg_ratio) for i, c in enumerate(pos_batch)], axis=0)
-#             return neg_batch
-#         elif mode == 'khg':
-#             pass
-        
-#     def neg_each(self, arr, arity, nr): # chua hieu lam
-#         arr[0,-2] = 1
-#         for a in range(arity):
-#             arr[a* nr + 1:(a + 1) * nr + 1, a + 1] = np.random.randint(low=1, high=self.num_ent(), size=nr)
-#         return arr
+#         # print(self.training_set_e)
+#         self.entity_num = len(self.training_set_e)
+#         self.item_num = item_num
 
-#     def was_last_batch(self):
-#         return (self.batch_index == 0)
+#         self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
+#         self.kg_ui_adj = self.__create_sparse_knowledge_bipartite_adjacency()
 
-#     def num_batch(self, batch_size):
-#         return int(math.ceil(float(len(self.data["train"])) / batch_size))
-    
+#     def construct_kg(self, kg_np):
+#         print('constructing knowledge graph ...')
+#         kg = collections.defaultdict(list)
+#         for head, relation, tail in kg_np:
+#             head, relation, tail = int(head),int(relation), int(tail)
+#             kg[head].append((tail, relation))
+#         return kg
+
+#     def __generate_set(self):
+#         for it in list(self.train_item_set):
+#             for ent in self.kg[it]:
+#                 tail, rel = ent
+#                 if tail not in self.entity:
+#                     self.entity[tail] = len(self.entity)
+#                     self.id2ent[self.entity[tail]] = tail 
+#                 self.training_set_ie[it][tail] = rel 
+#                 self.training_set_e[tail][it] = rel 
+#                 self.training_knowledge_data.append([it, tail, rel])
+
+#         for it in list(self.test_item_set):
+#             for ent in self.kg[it]:
+#                 tail, rel = ent
+#                 if  tail not in self.entity:
+#                     continue 
+#                 self.test_set_entity[it][tail] = rel
+
+#     def get_entity_id(self, e):
+#         if e in self.entity:
+#             return self.entity[e]
+
+#     def __create_sparse_knowledge_interaction_matrix(self):
+#         """
+#             return a sparse adjacency matrix with the shape (user number, item number)
+#         """
+#         row, col, entries = [], [], []
+#         for pair in self.training_knowledge_data:
+#             row += [self.item[pair[0]]]
+#             col += [self.entity[pair[1]]]
+#             entries += [1.0]
+
+#         interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.item_num,self.entity_num),dtype=np.float32)
+#         return interaction_mat
+
+#     def __create_sparse_knowledge_bipartite_adjacency(self, self_connection=False): 
+#         '''
+#         return a sparse adjacency matrix with the shape (user number + item number, user number + item number)
+#         '''
+#         n_nodes = self.item_num + self.entity_num 
+#         row_idx = [self.item[pair[0]] for pair in self.training_knowledge_data]
+#         col_idx = [self.entity[pair[1]] for pair in self.training_knowledge_data]
+#         item_np = np.array(row_idx)
+#         entity_np = np.array(col_idx)
+#         ratings = np.ones_like(item_np, dtype=np.float32)
+#         tmp_adj = sp.csr_matrix((ratings, (item_np, entity_np + self.item_num)), shape=(n_nodes, n_nodes),dtype=np.float32)
+#         adj_mat = tmp_adj + tmp_adj.T
+#         if self_connection:
+#             adj_mat += sp.eye(n_nodes)
+#         return adj_mat
+

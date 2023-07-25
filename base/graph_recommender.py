@@ -17,7 +17,7 @@ from util.evaluation import ranking_evaluation
 class GraphRecommender(Recommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
         super(GraphRecommender, self).__init__(conf, training_set, test_set, knowledge_set, **kwargs)
-        self.data = Interaction(conf, training_set, test_set, knowledge_set, self.knowledge)
+        self.data = Interaction(conf, training_set, test_set)
         self.bestPerformance = []
         top = self.ranking['-topN'].split(',')
         self.topN = [int(num) for num in top]

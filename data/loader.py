@@ -22,27 +22,25 @@ class FileIO(object):
 
     @staticmethod
     def load_data_set(file, rec_type='graph'):
-        _, _, _, data = load_cf(file)
-        # data = []
-        # with open(file) as f:
-        #     for line in f:
-        #         items = split('\t', line.strip())
-        #         user_id = int(items[0])
-        #         item_id = int(items[1])
-        #         weight = float(items[2])
-        #         data.append([user_id, item_id, float(weight)])
+        data = []
+        with open(file) as f:
+            next(f)
+            for line in f:
+                items = split('\t', line.strip())
+                user_id = int(items[0])
+                item_id = int(items[1])
+                weight = 1
+                data.append([user_id, item_id, float(weight)])
         return data
 
     @staticmethod
     def load_user_list(file):
-        # user_list = []
-        # print('loading user List...')
-        # with open(file) as f:
-        #     for line in f:
-        #         user_list.append(line.strip().split()[0])
-        # return user_list
-        user, _, _, _ = load_cf(file)
-        return user 
+        user_list = []
+        print('loading user List...')
+        with open(file) as f:
+            for line in f:
+                user_list.append(line.strip().split()[0])
+        return user_list
 
     @staticmethod
     def load_social_data(file):
@@ -63,53 +61,54 @@ class FileIO(object):
     @staticmethod 
     def load_kg_data(filename):
         # load Kg from file 
-        kg_data = pd.read_csv(filename, sep=' ', names=['h', 'r', 't'], engine='python')
-        kg_data = kg_data.drop_duplicates()
-        kg_np = kg_data.to_numpy()
+        kg_df = pd.read_csv(filename, sep='\t', delimiter='\t', header=None, engine='python', skiprows=1, \
+                              names= ['head_id:token','relation_id:token','tail_id:token'])
+        kg_np = kg_df.to_numpy()
         n_entity = len(set(kg_np[:, 0]) & set(kg_np[:, 2]))
         n_relation = len(set(kg_np[:, 1]))
         return n_entity, n_relation, kg_np
 
-def load_cf(filename):
-    # load user and item from file 
-    user = []
-    item = []
-    user_dict = dict()
+# def load_cf(filename):
+#     # load user and item from file 
+#     user = []
+#     item = []
+#     user_dict = dict()
 
-    lines = open(filename, 'r').readlines()
+#     lines = open(filename, 'r').readlines()
 
-    data = [] 
-    for l in lines:
-        tmp = l.strip()
-        inter = [int(i) for i in tmp.split()]
+#     data = [] 
+#     for l in lines:
+#         tmp = l.strip()
+#         inter = [int(i) for i in tmp.split()]
 
-        if len(inter) > 1:
-            user_id, item_ids = inter[0], inter[1:]
-            item_ids = list(set(item_ids))
+#         if len(inter) > 1:
+#             user_id, item_ids = inter[0], inter[1:]
+#             item_ids = list(set(item_ids))
 
-            for item_id in item_ids:
-                user.append(user_id)
-                item.append(item_id)
-                data.append([user_id, item_id, 1.0])
+#             for item_id in item_ids:
+#                 user.append(user_id)
+#                 item.append(item_id)
+#                 data.append([user_id, item_id, 1.0])
 
-            user_dict[user_id] = item_ids
-    user = np.array(user, dtype=np.int32)
-    item = np.array(item, dtype=np.int32)
-    
-    return user, item, user_dict, data 
+#             user_dict[user_id] = item_ids
+#     user = np.array(user, dtype=np.int32)
+#     item = np.array(item, dtype=np.int32)
+#     # data = data[:100000]
+#     return user, item, user_dict, data 
 
-def construct_kg(file):
-    datas = [] 
-    with open(file) as f:
-        for line in f:
-            items = split('\t', line.strip())
-            head_id = int(items[0])
-            relation_id = int(items[1])
-            tail_id = int(items[2])
-            datas.append([head_id, relation_id, tail_id])
-        kg_np = np.array(datas)
-        kg_df = pd.DataFrame(datas, columns=['head_id', 'relation_id', 'tail_id'])
-    return kg_df, kg_np
+# def construct_kg(file):
+#     datas = [] 
+#     with open(file) as f:
+#         for line in f:
+#             items = split('\t', line.strip())
+#             head_id = int(items[0])
+#             relation_id = int(items[1])
+#             tail_id = int(items[2])
+#             datas.append([head_id, relation_id, tail_id])
+#         kg_np = np.array(datas)
+#         kg_df = pd.DataFrame(datas, columns=['head_id', 'relation_id', 'tail_id'])
+#     return kg_df, kg_np
 
 if __name__=="__main__":
-    n_ent, n_rel, kg = FileIO.load_kg_data("./dataset/lastfm/filtered_kg.txt")
+    inter = FileIO.load_data_set("./dataset/lastfm/lastfm.inter")
+    import pdb; pdb.set_trace()

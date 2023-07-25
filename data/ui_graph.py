@@ -3,18 +3,11 @@ from collections import defaultdict
 from scipy.sparse.linalg import eigs
 from data.data import Data
 from data.graph import Graph
-from data.knowledge import Knowledge
 import scipy.sparse as sp
-import random 
-import collections
-import torch
-import dgl 
 
-class Interaction(Data,Graph, Knowledge):
-    def __init__(self, conf, training, test, knowledge_set, knowledge=False):
+class Interaction(Data,Graph):
+    def __init__(self, conf, training, test):
         self.conf = conf 
-        self.use_hypergraph = conf['use_hypergraph']
-
         Graph.__init__(self)
         Data.__init__(self,conf,training,test)
 
@@ -30,23 +23,19 @@ class Interaction(Data,Graph, Knowledge):
         self.test_set_item = set()
         self.__generate_set()
 
-        self.user_num = len(self.training_set_u)
-        self.item_num = len(self.training_set_i) 
-        self.ui_adj = self.__create_sparse_bipartite_adjacency()
+        self.n_users = len(self.training_set_u)
+        self.n_items = len(self.training_set_i) 
 
+        self.n_cf_train = len(self.training_data)
+        self.n_cf_test = len(self.test_data)
+
+        self.ui_adj = self.__create_sparse_bipartite_adjacency()
         self.norm_adj = self.normalize_graph_mat(self.ui_adj)
-        if knowledge:
-            Knowledge.__init__(self, conf, knowledge_set, self.item, self.test_set_item, self.item_num)
         
         self.interaction_mat, self.inv_interaction_mat = self.__create_sparse_interaction_matrix()
         self.hyperedge_adj = self.__create_sparse_hyperedge_adj()
         self.hypervertex_adj = self.__create_sparse_hypervertex_adj()
-        # if conf['positional_enc'] == 'laplacian':
-        #    self.positional_enc = self.laplacian_positional_encoding(self.ui_adj, conf['pos_enc_dim'])
-
-        # if conf[''] == 'true':
-        #     self.graph_rep = self.create_graph_with_pos_enc()
-
+        
     def __generate_set(self):
         for entry in self.training_data:
             user, item, rating = entry
@@ -78,13 +67,13 @@ class Interaction(Data,Graph, Knowledge):
         '''
         return a sparse adjacency matrix with the shape (user number + item number, user number + item number)
         '''
-        n_nodes = self.user_num + self.item_num
+        n_nodes = self.n_users + self.n_items
         row_idx = [self.user[pair[0]] for pair in self.training_data]
         col_idx = [self.item[pair[1]] for pair in self.training_data]
         user_np = np.array(row_idx)
         item_np = np.array(col_idx)
         ratings = np.ones_like(user_np, dtype=np.float32)
-        tmp_adj = sp.csr_matrix((ratings, (user_np, item_np + self.user_num)), shape=(n_nodes, n_nodes),dtype=np.float32)
+        tmp_adj = sp.csr_matrix((ratings, (user_np, item_np + self.n_users)), shape=(n_nodes, n_nodes),dtype=np.float32)
         adj_mat = tmp_adj + tmp_adj.T
         if self_connection:
             adj_mat += sp.eye(n_nodes)
@@ -92,20 +81,20 @@ class Interaction(Data,Graph, Knowledge):
 
     def __create_sparse_hypervertex_adj(self, self_connection=False):
         '''
-        return a sparse adjacency matrix with the shape (user_number, user_number)
+        return a sparse adjacency matrix with the shape (n_usersber, n_usersber)
         '''
         hyperedge_adj = self.interaction_mat.dot(self.inv_interaction_mat)
         if self_connection:
-            hyperedge_adj += sp.eye(self.user_num)
+            hyperedge_adj += sp.eye(self.n_users)
         return hyperedge_adj 
 
     def __create_sparse_hyperedge_adj(self, self_connection=False):
         '''
-        return a sparse adjacency matrix with the shape (item_number, item_number)
+        return a sparse adjacency matrix with the shape (n_itemsber, n_itemsber)
         '''
         hypervertex_adj = self.inv_interaction_mat.dot(self.interaction_mat)
         if self_connection:
-            hypervertex_adj += sp.eye(self.item_num)
+            hypervertex_adj += sp.eye(self.n_items)
         return hypervertex_adj
 
     def convert_to_laplacian_mat(self, adj_mat):
@@ -117,61 +106,6 @@ class Interaction(Data,Graph, Knowledge):
         tmp_adj = tmp_adj + tmp_adj.T
         return self.normalize_graph_mat(tmp_adj)
 
-    def _laplacian_positional_encoding(self, adj_mat, pos_enc_dim):
-        pass 
-
-    def create_graph_with_pos_enc(self, source_name, target_name, source_embedding, target_embedding, type='interaction', pos_enc='laplacian'):
-        pass 
-    
-    # def _laplacian_positional_encoding(self, adj_mat, pos_enc_dim):        
-    #     """
-    #         Graph positional encoding v/ Laplacian eigenvectors
-    #     """
-    #     # Laplacian = I - D^(-1/2)AD^(-1/2) 
-    #     adj_shape = adj_mat.get_shape()
-    #     n_nodes = adj_shape[0]+adj_shape[1]
-    #     (user_np_keep, item_np_keep) = adj_mat.nonzero()
-    #     ratings_keep = adj_mat.data
-    #     tmp_adj = sp.csr_matrix((ratings_keep, (user_np_keep, item_np_keep + adj_shape[0])),shape=(n_nodes, n_nodes),dtype=np.float32)
-    #     tmp_adj = tmp_adj + tmp_adj.T
-
-    #     rowsum = np.array(tmp_adj.sum(1))
-    #     d_inv = np.power(rowsum, -0.5).flatten()
-    #     d_inv[np.isinf(d_inv)] = 0.
-    #     d_mat_inv = sp.diags(d_inv)
-    #     norm_adj_mat = d_mat_inv.dot(tmp_adj)
-    #     L = sp.eye(n_nodes) - norm_adj_mat * tmp_adj # Lapacian matrix 
-    #     _, EigVec = eigs(L, k=int(pos_enc_dim))
-    #     lap_pos_encoding = torch.from_numpy(EigVec).float() 
-    #     return lap_pos_encoding
-    
-    # def create_graph_with_pos_enc(self, source_name, target_name, source_embedding, target_embedding, type='interaction', pos_enc='laplacian'):
-    #     if type == 'interaction':
-    #         data = self.training_data
-    #         source_ids = data[:,0]
-    #         target_ids = data[:,1]
-    #         relation_ids  = data[:,2]
-    #         graph = dgl.heterograph({(source_name, 'interacted', target_name): (source_ids, target_ids)})
-    #         graph.nodes[source_name].data['embedding'] =  source_embedding
-    #         graph.nodes[target_name].data['embedding'] =  target_embedding 
-    #         graph.edges['interacted'].data['relation_id'] = relation_ids 
-    #         if pos_enc == 'laplacian':
-    #             graph.nodes['pos_enc'].data['embedding'] = self._laplacian_positional_encoding(self.ui_adj, self.conf['pos_enc_dim'])
-
-    #     elif type == 'knowledge':
-    #         data = self.training_knowledge_data
-    #         source_ids =  data[:,0]
-    #         target_ids = data[:,2]
-    #         relation_ids  = data[:,1]
-    #         graph = dgl.heterograph({(source_name, 'interacted', target_name): (source_ids, target_ids)})
-    #         graph.nodes[source_name].data['embedding'] =  source_embedding
-    #         graph.nodes[target_name].data['embedding'] =  target_embedding 
-    #         graph.edges['interacted'].data['relation_id'] = relation_ids 
-    #         if pos_enc == 'laplacian':
-    #             graph.nodes['pos_enc'].data['embedding'] = self._laplacian_positional_encoding(self.kg_ui_adj, self.conf['pos_enc_dim'])
-    #     return graph 
-    
-
     def __create_sparse_interaction_matrix(self):
         """
             return a sparse adjacency matrix with the shape (user number, item number)
@@ -181,8 +115,8 @@ class Interaction(Data,Graph, Knowledge):
             row += [self.user[pair[0]]]
             col += [self.item[pair[1]]]
             entries += [1.0]
-        interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.user_num,self.item_num),dtype=np.float32)
-        inv_interaction_mat = sp.csr_matrix((entries, (col, row)), shape=(self.item_num, self.user_num), dtype=np.float32)
+        interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_users,self.n_items),dtype=np.float32)
+        inv_interaction_mat = sp.csr_matrix((entries, (col, row)), shape=(self.n_items, self.n_users), dtype=np.float32)
         return interaction_mat, inv_interaction_mat
             
     def get_user_id(self, u):
@@ -258,3 +192,51 @@ class Interaction(Data,Graph, Knowledge):
             m[self.user[u]] = vec
         return m
 
+    # def _laplacian_positional_encoding(self, adj_mat, pos_enc_dim):        
+    #     """
+    #         Graph positional encoding v/ Laplacian eigenvectors
+    #     """
+    #     # Laplacian = I - D^(-1/2)AD^(-1/2) 
+    #     adj_shape = adj_mat.get_shape()
+    #     n_nodes = adj_shape[0]+adj_shape[1]
+    #     (user_np_keep, item_np_keep) = adj_mat.nonzero()
+    #     ratings_keep = adj_mat.data
+    #     tmp_adj = sp.csr_matrix((ratings_keep, (user_np_keep, item_np_keep + adj_shape[0])),shape=(n_nodes, n_nodes),dtype=np.float32)
+    #     tmp_adj = tmp_adj + tmp_adj.T
+
+    #     rowsum = np.array(tmp_adj.sum(1))
+    #     d_inv = np.power(rowsum, -0.5).flatten()
+    #     d_inv[np.isinf(d_inv)] = 0.
+    #     d_mat_inv = sp.diags(d_inv)
+    #     norm_adj_mat = d_mat_inv.dot(tmp_adj)
+    #     L = sp.eye(n_nodes) - norm_adj_mat * tmp_adj # Lapacian matrix 
+    #     _, EigVec = eigs(L, k=int(pos_enc_dim))
+    #     lap_pos_encoding = torch.from_numpy(EigVec).float() 
+    #     return lap_pos_encoding
+    
+    # def create_graph_with_pos_enc(self, source_name, target_name, source_embedding, target_embedding, type='interaction', pos_enc='laplacian'):
+    #     if type == 'interaction':
+    #         data = self.training_data
+    #         source_ids = data[:,0]
+    #         target_ids = data[:,1]
+    #         relation_ids  = data[:,2]
+    #         graph = dgl.heterograph({(source_name, 'interacted', target_name): (source_ids, target_ids)})
+    #         graph.nodes[source_name].data['embedding'] =  source_embedding
+    #         graph.nodes[target_name].data['embedding'] =  target_embedding 
+    #         graph.edges['interacted'].data['relation_id'] = relation_ids 
+    #         if pos_enc == 'laplacian':
+    #             graph.nodes['pos_enc'].data['embedding'] = self._laplacian_positional_encoding(self.ui_adj, self.conf['pos_enc_dim'])
+
+    #     elif type == 'knowledge':
+    #         data = self.training_knowledge_data
+    #         source_ids =  data[:,0]
+    #         target_ids = data[:,2]
+    #         relation_ids  = data[:,1]
+    #         graph = dgl.heterograph({(source_name, 'interacted', target_name): (source_ids, target_ids)})
+    #         graph.nodes[source_name].data['embedding'] =  source_embedding
+    #         graph.nodes[target_name].data['embedding'] =  target_embedding 
+    #         graph.edges['interacted'].data['relation_id'] = relation_ids 
+    #         if pos_enc == 'laplacian':
+    #             graph.nodes['pos_enc'].data['embedding'] = self._laplacian_positional_encoding(self.kg_ui_adj, self.conf['pos_enc_dim'])
+    #     return graph 
+    
