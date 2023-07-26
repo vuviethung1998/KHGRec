@@ -61,12 +61,17 @@ class FileIO(object):
     @staticmethod 
     def load_kg_data(filename):
         # load Kg from file 
-        kg_df = pd.read_csv(filename, sep='\t', delimiter='\t', header=None, engine='python', skiprows=1, \
+        kg_df = pd.read_csv(filename, sep='\t', header=None, engine='python', skiprows=1, \
                               names= ['head_id:token','relation_id:token','tail_id:token'])
-        kg_np = kg_df.to_numpy()
-        n_entity = len(set(kg_np[:, 0]) & set(kg_np[:, 2]))
-        n_relation = len(set(kg_np[:, 1]))
-        return n_entity, n_relation, kg_np
+        kg_df = kg_df.rename(columns={
+            'head_id:token': 'h',
+            'relation_id:token': 'r',
+            'tail_id:token': 't'
+        })
+        # kg_np = kg_df.to_numpy()
+        # n_entity = len(set(kg_np[:, 0]) & set(kg_np[:, 2]))
+        # n_relation = len(set(kg_np[:, 1]))
+        return kg_df
 
 # def load_cf(filename):
 #     # load user and item from file 
@@ -110,5 +115,5 @@ class FileIO(object):
 #     return kg_df, kg_np
 
 if __name__=="__main__":
-    inter = FileIO.load_data_set("./dataset/lastfm/lastfm.inter")
+    kg = FileIO.load_kg_data("./dataset/lastfm/lastfm.kg")
     import pdb; pdb.set_trace()

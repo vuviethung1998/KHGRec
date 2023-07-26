@@ -8,7 +8,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Process some integers.")
 
     # Add the arguments
-    parser.add_argument('--model', type=str, default='LightGCN',
+    parser.add_argument('--model', type=str, default='HGNN',
                         help='Model name')
     parser.add_argument('--dataset', type=str, default='lastfm',
                         help='Dataset name')
@@ -24,7 +24,6 @@ if __name__ == '__main__':
     ssl_graph_models = ['SGL', 'SimGCL', 'SEPT', 'MHCN', 'BUIR', 'SelfCF', 'SSL4Rec', 'XSimGCL', 'NCL','MixGCF', 'HKGRippleNet', 'HGNN', 'HCCF']
     sequential_baselines= ['SASRec']
     ssl_sequential_models = ['CL4SRec']
-
 
     args = parse_arguments()
 

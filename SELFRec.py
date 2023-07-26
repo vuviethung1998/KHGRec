@@ -8,11 +8,7 @@ class SELFRec(object):
         default_dir = f"./dataset/{config['dataset']}/"
         self.training_data = FileIO.load_data_set(default_dir + config['training.set'], config['model.type'])
         self.test_data = FileIO.load_data_set(default_dir + config['test.set'], config['model.type'])
-    
-        if config['use.knowledge'] == 'true':
-            self.knowledge_data = FileIO.load_kg_data(default_dir + config['knowledge.data'])
-        else:
-            self.knowledge_data = ''
+        self.knowledge_data = FileIO.load_kg_data(default_dir + f"{config['dataset']}.kg")
 
         self.kwargs = {}
         if config.contain('social.data'):

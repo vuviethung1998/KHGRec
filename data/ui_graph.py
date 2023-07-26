@@ -33,8 +33,8 @@ class Interaction(Data,Graph):
         self.norm_adj = self.normalize_graph_mat(self.ui_adj)
         
         self.interaction_mat, self.inv_interaction_mat = self.__create_sparse_interaction_matrix()
-        self.hyperedge_adj = self.__create_sparse_hyperedge_adj()
-        self.hypervertex_adj = self.__create_sparse_hypervertex_adj()
+        # self.hyperedge_adj = self.__create_sparse_hyperedge_adj()
+        # self.hypervertex_adj = self.__create_sparse_hypervertex_adj()
         
     def __generate_set(self):
         for entry in self.training_data:

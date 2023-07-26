@@ -10,7 +10,7 @@ import wandb
 from tqdm import tqdm 
 
 from base.graph_recommender import GraphRecommender
-from util.sampler import next_batch_pairwise, next_batch_pairwise_kg, next_batch_pairwise_kg_neg, next_batch_pairwise_kg_neg_relation
+from util.sampler import next_batch_pairwise
 import torch
 import torch.nn as nn 
 import torch.nn.functional as F
@@ -198,8 +198,8 @@ class HGNNModel(nn.Module):
     def _init_model(self):
         initializer = nn.init.xavier_uniform_
         embedding_dict = nn.ParameterDict({
-            'user_emb': nn.Parameter(initializer(torch.empty(self.data.user_num, self.input_dim)).to(device)),
-            'item_emb': nn.Parameter(initializer(torch.empty(self.data.item_num, self.input_dim)).to(device))
+            'user_emb': nn.Parameter(initializer(torch.empty(self.data.n_users, self.input_dim)).to(device)),
+            'item_emb': nn.Parameter(initializer(torch.empty(self.data.n_items, self.input_dim)).to(device))
         })
         return embedding_dict
 

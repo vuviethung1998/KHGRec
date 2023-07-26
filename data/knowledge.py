@@ -10,46 +10,50 @@ from data.ui_graph import Interaction
 
 class Knowledge(Interaction):
     def __init__(self, conf,  training, test, knowledge):
-        super(Knowledge, self).__init__(conf,  training, test, knowledge)
+        super().__init__(conf,  training, test)
         self.conf = conf    
+        self.kg_data = knowledge 
 
         self.entity = {}
         self.id2ent = {}
+
+        self.cf_train_data = np.array(training)
+
         self.training_set_e = defaultdict(dict)
 
-        self.construct_data(knowledge)
-
-        self.n_entities = len(self.training_set_e)
+        self.construct_data()
         self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
 
-    def construct_data(self, kg_data):
+    def construct_data(self):
+        kg_data = self.kg_data
         n_relations = max(kg_data['r']) + 1
         inverse_kg_data = kg_data.copy()
         inverse_kg_data = inverse_kg_data.rename({'h': 't', 't': 'h'}, axis='columns')
         inverse_kg_data['r'] += n_relations
-        self.kg_train_data = pd.concat([kg_data, inverse_kg_data], axis=0, ignore_index=True, sort=False)
 
-        # self.kg_train_data = pd.concat([kg_data, cf2kg_train_data, inverse_cf2kg_train_data], ignore_index=True)
-        self.n_kg_train = len(self.kg_train_data)
+        kg_data = pd.concat([kg_data, inverse_kg_data], axis=0, ignore_index=True, sort=False)
 
+        # remap user_id 
+        kg_data['r'] += 2
+        
+        self.n_relations = max(kg_data['r']) + 1 
+        self.n_entities = max(max(self.kg_data['h']), max(self.kg_data['t'])) + 1
         self.n_users_entities = self.n_users + self.n_entities
 
-        self.cf_train_data = (np.array(list(map(lambda d: d + self.n_entities, self.cf_train_data[0]))).astype(np.int32), self.cf_train_data[1].astype(np.int32))
-        self.cf_test_data = (np.array(list(map(lambda d: d + self.n_entities, self.cf_test_data[0]))).astype(np.int32), self.cf_test_data[1].astype(np.int32))
-
-        self.train_user_dict = {k + self.n_entities: np.unique(v).astype(np.int32) for k, v in self.train_user_dict.items()}
-        self.test_user_dict = {k + self.n_entities: np.unique(v).astype(np.int32) for k, v in self.test_user_dict.items()}
+        self.kg_train_data = pd.concat([kg_data, inverse_kg_data], axis=0, ignore_index=True, sort=False)
+        self.n_kg_train = len(self.kg_train_data)
 
         # add interactions to kg data
         cf2kg_train_data = pd.DataFrame(np.zeros((self.n_cf_train, 3), dtype=np.int32), columns=['h', 'r', 't'])
-        cf2kg_train_data['h'] = self.cf_train_data[0]
-        cf2kg_train_data['t'] = self.cf_train_data[1]
+        cf2kg_train_data['h'] = self.cf_train_data[:,0]
+        cf2kg_train_data['t'] = self.cf_train_data[:,1]
 
         inverse_cf2kg_train_data = pd.DataFrame(np.ones((self.n_cf_train, 3), dtype=np.int32), columns=['h', 'r', 't'])
-        inverse_cf2kg_train_data['h'] = self.cf_train_data[1]
-        inverse_cf2kg_train_data['t'] = self.cf_train_data[0]
+        inverse_cf2kg_train_data['h'] = self.cf_train_data[:,1]
+        inverse_cf2kg_train_data['t'] = self.cf_train_data[:,0]
 
         self.kg_train_data = pd.concat([kg_data, cf2kg_train_data, inverse_cf2kg_train_data], ignore_index=True)
+        self.n_kg_train = len(self.kg_train_data)
 
         # construct kg dict
         h_list = []
@@ -59,8 +63,8 @@ class Knowledge(Interaction):
         self.train_kg_dict = collections.defaultdict(list)
         self.train_relation_dict = collections.defaultdict(list)
 
-        for row in self.kg_train_data.iterrows():
-            h, r, t = row
+        for idx, row in self.kg_train_data.iterrows():
+            h, r, t = int(row['h']), int(row['r']), int(row['t'])
             h_list.append(h)
             t_list.append(t)
             r_list.append(r)
@@ -86,12 +90,13 @@ class Knowledge(Interaction):
             return a sparse adjacency matrix with the shape (entity number, entity number)
         """
         row, col, entries = [], [], []
-        for pair in self.kg_train_data.iterrows():
-            row += [self.entity[pair[0]]]
-            col += [self.entity[pair[2]]]
+        for idx, pair in self.kg_train_data.iterrows():
+            head, tail = int(pair['h']), int(pair['t'])
+            row += [self.entity[head]]
+            col += [self.entity[tail]]
             entries += [1.0]
 
-        interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.entity_num, self.entity_num),dtype=np.float32)
+        interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_entities, self.n_entities),dtype=np.float32)
         return interaction_mat
 
 # class Knowledge(object):
