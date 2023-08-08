@@ -140,7 +140,7 @@ def denormalize(vec, max_val, min_val):
     return min_val + (vec - 0.01) * (max_val - min_val)
 
 
-@jit(nopython=True)
+# @jit(nopython=True)
 def find_k_largest(K, candidates):
     n_candidates = []  
     for iid, score in enumerate(candidates[:K]):

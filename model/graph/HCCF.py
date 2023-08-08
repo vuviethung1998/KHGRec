@@ -2,10 +2,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import time
-import os
-from os.path import abspath
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from base.graph_recommender import GraphRecommender
 from util.sampler import next_batch_pairwise_kg, next_batch_pairwise

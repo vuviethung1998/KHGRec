@@ -4,7 +4,8 @@ from util.torch_interface import TorchGraphInterface
 import torch
 import random 
 
-def next_batch_kg(data, batch_size, n_negs=1):
+def next_batch_kg(rec, batch_size):
+    # sample data for KG
     def sample_pos_triples_for_h(kg_dict, head, n_sample_pos_triples):
         pos_triples = kg_dict[head]
         n_pos_triples = len(pos_triples)
@@ -15,6 +16,7 @@ def next_batch_kg(data, batch_size, n_negs=1):
                 break
 
             pos_triple_idx = np.random.randint(low=0, high=n_pos_triples, size=1)[0]
+            
             tail = pos_triples[pos_triple_idx][0]
             relation = pos_triples[pos_triple_idx][1]
 
@@ -30,35 +32,55 @@ def next_batch_kg(data, batch_size, n_negs=1):
         while True:
             if len(sample_neg_tails) == n_sample_neg_triples:
                 break
-
+            
             tail = np.random.randint(low=0, high=highest_neg_idx, size=1)[0]
+            while tail not in kg_dict.keys():
+                tail = np.random.randint(low=0, high=highest_neg_idx, size=1)[0]
+            
+            # xac nhan tail duoc chon k nam trong tap positive va chua tung duoc chon
             if (tail, relation) not in pos_triples and tail not in sample_neg_tails:
                 sample_neg_tails.append(tail)
         return sample_neg_tails
+    
+    data_kg = rec.data_kg
+    kg_dict = data_kg.train_kg_dict
+    # ui_data = rec.data.training_data 
+    
+    exist_heads = list(kg_dict.keys())
+    highest_neg_idx = data_kg.n_entities 
+    ptr = 0 
+    data_size = len(exist_heads)
+    
+    while ptr < data_size:
+        if ptr + batch_size < data_size:
+            batch_head = random.sample(exist_heads, batch_size)
+            batch_end = ptr + batch_size
+        else:
+            batch_head = [random.choice(exist_heads) for _ in range(batch_size)]
+            batch_end = data_size
+            
+        ptr = batch_end
 
-    kg_dict = data.knowledge_data
-    highest_neg_idx = data.n_entities
+        batch_relation, batch_pos_tail, batch_neg_tail = [], [], []
+        for h in batch_head:
+            relation, pos_tail = sample_pos_triples_for_h(kg_dict, h, 1)
+            batch_relation += relation
+            batch_pos_tail += pos_tail
+            
+            neg_tail = sample_neg_triples_for_h(kg_dict, h, relation[0], 1, highest_neg_idx)
+            batch_neg_tail += neg_tail
+        
+        batch_head = [data_kg.entity[i] for i in batch_head]
+        batch_relation = [data_kg.relation[i] for i in batch_relation]
+        batch_pos_tail = [data_kg.entity[i] for i in batch_pos_tail]
+        batch_neg_tail = [data_kg.entity[i] for i in batch_neg_tail]
+        
+        batch_head = torch.LongTensor(batch_head).cuda()
+        batch_relation = torch.LongTensor(batch_relation).cuda()
+        batch_pos_tail = torch.LongTensor(batch_pos_tail).cuda()
+        batch_neg_tail = torch.LongTensor(batch_neg_tail).cuda()
 
-    exist_heads = data.keys()
-    if batch_size <= len(exist_heads):
-        batch_head = random.sample(exist_heads, batch_size)
-    else:
-        batch_head = [random.choice(exist_heads) for _ in range(batch_size)]
-
-    batch_relation, batch_pos_tail, batch_neg_tail = [], [], []
-    for h in batch_head:
-        relation, pos_tail = sample_pos_triples_for_h(kg_dict, h, 1)
-        batch_relation += relation
-        batch_pos_tail += pos_tail
-
-        neg_tail = sample_neg_triples_for_h(kg_dict, h, relation[0], n_negs, highest_neg_idx)
-        batch_neg_tail += neg_tail
-
-    batch_head = torch.LongTensor(batch_head)
-    batch_relation = torch.LongTensor(batch_relation)
-    batch_pos_tail = torch.LongTensor(batch_pos_tail)
-    batch_neg_tail = torch.LongTensor(batch_neg_tail)
-    return batch_head, batch_relation, batch_pos_tail, batch_neg_tail
+        yield batch_head, batch_relation, batch_pos_tail, batch_neg_tail    
 
 
 def next_batch_pairwise(data,batch_size,n_negs=1):

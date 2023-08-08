@@ -1,7 +1,7 @@
 from data.loader import FileIO
 
 class SELFRec(object):
-    def __init__(self, config):
+    def __init__(self, config, args=None):
         self.social_data = []
         self.feature_data = []
         self.config = config
@@ -11,6 +11,8 @@ class SELFRec(object):
         self.knowledge_data = FileIO.load_kg_data(default_dir + f"{config['dataset']}.kg")
 
         self.kwargs = {}
+        if args:
+            self.kwargs = args 
         if config.contain('social.data'):
             social_data = FileIO.load_social_data(self.config['social.data'])
             self.kwargs['social.data'] = social_data
@@ -22,4 +24,3 @@ class SELFRec(object):
         exec(import_str)
         recommender = self.config['model.name'] + '(self.config,self.training_data,self.test_data,self.knowledge_data,**self.kwargs)'
         eval(recommender).execute()
-

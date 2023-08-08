@@ -35,25 +35,6 @@ def _create_train_test_file(dir, infile):
     
     FileIO.write_file(dir, 'train.txt', data_train)
     FileIO.write_file(dir, 'test.txt', data_test)
-    
-
-def _remove_unused_relations(dir, infile):
-    relations = [
-        "music.artist.genre",
-        "music.genre.artists",
-        "music.release.artist",
-        "music.recording.artist",
-        "music.record_label.artist"
-    ]
-    newlines = []
-    with open(dir +infile, 'r') as f:
-        for line in f:
-            # import pdb; pdb.set_trace()
-            items = split('\t', line.strip())
-            relation = items[1]
-            if relation in relations:
-                newlines.append(line)
-    FileIO.write_file(dir, 'filtered_kg.txt', newlines)
 
 def _create_kg_data(dir, infile):
     n_entities, n_relations, kg_data = FileIO.load_kg_data(dir+infile)

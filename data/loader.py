@@ -71,7 +71,7 @@ class FileIO(object):
         # kg_np = kg_df.to_numpy()
         # n_entity = len(set(kg_np[:, 0]) & set(kg_np[:, 2]))
         # n_relation = len(set(kg_np[:, 1]))
-        return kg_df
+        return kg_df.head(10000)
 
 # def load_cf(filename):
 #     # load user and item from file 
