@@ -54,11 +54,9 @@ class KGGraphRecommender(Recommender):
             r = '\rProgress: [{}{}]{}%'.format('+' * ratenum, ' ' * (50 - ratenum), ratenum*2)
             sys.stdout.write(r)
             sys.stdout.flush()
-
         # predict
         rec_list = {}
         user_count = len(self.data.test_set)
-        print(user_count)
         lst_users =  list(self.data_kg.userent.keys())
         lst_items =  list(self.data_kg.itement.keys())
         for i, user in enumerate(self.data.test_set):
@@ -66,9 +64,6 @@ class KGGraphRecommender(Recommender):
             score = torch.matmul(user_emb[user_id], item_emb.transpose(0, 1))
             candidates = score.cpu().numpy()
             
-            # e_find_candidates = time.time()
-            # print("Calculate candidates time: %f s" % (e_find_candidates - s_find_candidates))
-            # predictedItems = denormalize(predictedItems, self.data.rScale[-1], self.data.rScale[0])
             rated_list, li = self.data.user_rated(user)
             for item in rated_list:
                 candidates[lst_items.index(item)] = -10e8
@@ -110,12 +105,7 @@ class KGGraphRecommender(Recommender):
     def fast_evaluation(self, model, epoch, user_embed, item_embed, kwargs=None):
         print('Evaluating the model...')
         s_test = time.time()
-        print(user_embed)
-        print(item_embed)
-        print(user_embed.shape)
-        print(item_embed.shape)
-        rec_list = self.test(user_embed, item_embed)
-        print(rec_list)
+        rec_list = test(self.data, self.data_kg, user_embed, item_embed, self.max_N)
         e_test = time.time() 
         print("Test time: %f s" % (e_test - s_test))
         
@@ -187,7 +177,6 @@ class KGGraphRecommender(Recommender):
         weight_file = out_dir + '/' + file_name 
         torch.save(model.state_dict(), weight_file)
 
-
     def save_performance_row(self, ep, data_ep):
         # opening the csv file in 'w' mode
         csv_path = self.output_path + 'train_performance.csv'
@@ -234,3 +223,37 @@ class KGGraphRecommender(Recommender):
     def save_perfomance_training(self, log_train):
         df_train_log = pd.DataFrame(log_train)
         df_train_log.to_csv(self.output_path + '/train_performance.csv')
+
+def test(data, data_kg, user_emb, item_emb, max_N):
+    def process_bar(num, total):
+        rate = float(num) / total
+        ratenum = int(50 * rate)
+        r = '\rProgress: [{}{}]{}%'.format('+' * ratenum, ' ' * (50 - ratenum), ratenum*2)
+        sys.stdout.write(r)
+        sys.stdout.flush()
+    # predict
+    rec_list = {}
+    user_count = len(data.test_set)
+    lst_users =  list(data_kg.userent.keys())
+    lst_items =  list(data_kg.itement.keys())
+    for i, user in enumerate(data.test_set):
+        user_id  = lst_users.index(user)
+        score = torch.matmul(user_emb[user_id], item_emb.transpose(0, 1))
+        candidates = score.cpu().numpy()
+        
+        rated_list, li = data.user_rated(user)
+        for item in rated_list:
+            candidates[lst_items.index(item)] = -10e8
+        # s_find_k_largest = time.time()
+        ids, scores = find_k_largest(max_N, candidates)
+        # e_find_k_largest = time.time()
+        # print("Find k largest candidates: %f s" % (e_find_k_largest - s_find_k_largest))
+        item_names = [lst_items[iid] for iid in ids]
+        rec_list[user] = list(zip(item_names, scores))
+        if i % 1000 == 0:
+            process_bar(i, user_count)
+    process_bar(user_count, user_count)
+    print('')
+    print(rec_list)
+    return rec_list
+

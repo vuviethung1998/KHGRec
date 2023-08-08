@@ -159,6 +159,7 @@ def ranking_evaluation(origin, res, N):
     measure = []
     for n in N:
         predicted = {}
+        print(res)
         for user in res:
             predicted[user] = res[user][:n]
         indicators = []

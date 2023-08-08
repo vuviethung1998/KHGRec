@@ -135,6 +135,7 @@ class KGAT(KGGraphRecommender):
                 user_emb = entity_emb[self.model.user_indices]
                 item_emb = entity_emb[self.model.item_indices]
                 data_ep = self.fast_evaluation(self.model, ep, user_emb, item_emb)
+            
             self.save_performance_row(ep, data_ep)
             self.save_loss_row([ep, train_loss, cf_loss, kg_loss])
         
@@ -142,40 +143,11 @@ class KGAT(KGGraphRecommender):
             lst_train_losses.append([ep, train_loss]) 
             lst_rec_losses.append([ep, cf_loss])
             lst_kg_losses.append([ep, kg_loss])
+
         self.save_loss(lst_train_losses, lst_rec_losses, lst_kg_losses)
         self.save_perfomance_training(lst_performances)
         user_emb, item_emb = self.best_user_emb, self.best_item_emb
         return user_emb, item_emb  
-
-    def test(self, user_emb, item_emb):
-        def process_bar(num, total):
-            rate = float(num) / total
-            ratenum = int(50 * rate)
-            r = '\rProgress: [{}{}]{}%'.format('+' * ratenum, ' ' * (50 - ratenum), ratenum*2)
-            sys.stdout.write(r)
-            sys.stdout.flush()
-
-        # predict
-        rec_list = {}
-        user_count = len(self.data.test_set)
-        for i, user in enumerate(self.data.test_set):
-            user_id = self.data_kg.u2id[user]
-            score = torch.matmul(user_emb[user_id], item_emb.transpose(0, 1))
-            candidates = score.cpu().numpy()
-            
-            rated_list, li = self.data.user_rated(user)
-            for item in rated_list:
-                candidates[self.data_kg.i2id[item]] = -10e8
-            # s_find_k_largest = time.time()
-            ids, scores = find_k_largest(self.max_N, candidates)
-
-            item_names = [self.data_kg.id2i[iid] for iid in ids]
-            rec_list[user] = list(zip(item_names, scores))
-            if i % 1000 == 0:
-                process_bar(i, user_count)
-        process_bar(user_count, user_count)
-        print('')
-        self.evaluate(rec_list) 
 
     def predict(self, u):
         user_id = self.data_kg.u2id[u]

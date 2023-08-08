@@ -53,13 +53,13 @@ def next_batch_kg(kg_data, kg_dict, batch_size, n_negs=1):
         # time1 = datetime.datetime.now()
         h_idx = [h_dict[head] for head in heads]
         
-        r_idx.extend(relations)
-        pos_t_idx.extend(tails)
+        r_idx = [int(rel) for rel in relations]
+        pos_t_idx = [int(pos_t) for pos_t in tails]
         for head in heads:
             neg_t = random.choice(all_tails)
             while neg_t in pos_tail_sets[head]:
                 neg_t = random.choice(all_tails)
-            neg_t_idx.append(h_dict[neg_t])
+            neg_t_idx.append(int(h_dict[neg_t]))
 
         h_idx  = torch.LongTensor(h_idx).cuda()
         r_idx  = torch.LongTensor(r_idx).cuda()

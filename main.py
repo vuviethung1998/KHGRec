@@ -20,7 +20,7 @@ def parse_arguments():
                         help='Lrate')
     parser.add_argument('--lratekg', type=float, default=0.001,
                         help='Lrate KG')
-    parser.add_argument('--max_epoch', type=int, default=1,
+    parser.add_argument('--max_epoch', type=int, default=500,
                         help='Max Epoch')
     parser.add_argument('--batch_size', type=int, default=2048,
                         help='Batch size')
