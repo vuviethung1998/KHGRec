@@ -3,28 +3,28 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from util.loss_torch import L2_loss_mean
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 import time
 import os, sys
 from os.path import abspath
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 import random 
 import numpy as np 
-from random import shuffle,randint,choice,sample
 
 from base.kggraph_recommender import KGGraphRecommender
 from util.knowledge_sampler import next_batch_pairwise, next_batch_kg
-from util.loss_torch import bpr_loss, l2_reg_loss, EmbLoss, contrastLoss
 from util.init import *
 from base.torch_interface import TorchGraphInterface
-from util.conf import OptionConf
-from util.algorithm import find_k_largest
+from util.loss_torch import L2_loss_mean
+from util.evaluation import early_stopping
+
+device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 
 class KGAT(KGGraphRecommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
         super(KGAT, self).__init__(conf, training_set, test_set, knowledge_set, **kwargs)
         self._parse_args(kwargs)
-        A_in = TorchGraphInterface.convert_sparse_mat_to_tensor(self.data_kg.kg_interaction_mat).cuda()
+        A_in = TorchGraphInterface.convert_sparse_mat_to_tensor(self.data_kg.kg_interaction_mat).to(device)
         self.model = KGATEncoder(kwargs, self.data_kg, A_in=A_in)
 
     def _parse_args(self, args):
@@ -46,6 +46,7 @@ class KGAT(KGGraphRecommender):
         self.conv_dim_list = args['conv_dim_list']
         self.seed = args['seed']
         self.alpha = args['alpha']
+        self.stopping_steps =  args['stopping_steps']
 
     def train(self):
         # seed
@@ -58,12 +59,12 @@ class KGAT(KGGraphRecommender):
         lst_rec_losses = []
         lst_kg_losses = []
         lst_performances = []
+        recall_list = []
         
         cf_optimizer  = torch.optim.Adam(self.model.parameters(), lr=self.lRate)
         kg_optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lRateKG)
-
-        kg_data = self.data_kg.kg_train_data.to_numpy()
-        kg_dict = self.data_kg.train_kg_dict
+        scheduler_cf = ReduceLROnPlateau(cf_optimizer, 'min', factor=self.lr_decay, patience=10)
+        scheduler_kg = ReduceLROnPlateau(kg_optimizer, 'min', factor=self.lr_decay, patience=10)
             
         for ep in range(self.maxEpoch):
             self.model.train()
@@ -77,11 +78,9 @@ class KGAT(KGGraphRecommender):
             
             n_cf_batch = int(self.data.n_cf_train // self.batchSize + 1)
             n_kg_batch = int(self.data_kg.n_kg_train // self.batchSizeKG + 1)
-            
-            shuffle(kg_data)
-            
+                        
             # Learn cf graph
-            for n, batch in enumerate(next_batch_pairwise(self.data, self.batchSize)):
+            for n, batch in enumerate(next_batch_pairwise(self.data, self.batchSize, device=device)):
                 user_idx, pos_idx, neg_idx = batch
                 entity_emb = self.model.calc_cf_embeddings()
                 
@@ -94,6 +93,8 @@ class KGAT(KGGraphRecommender):
                     print('ERROR (CF Training): Epoch {:04d} Iter {:04d} / {:04d} Loss is nan.'.format(ep, n, n_cf_batch))
 
                 cf_batch_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 4)
+
                 cf_optimizer.step()
                 cf_optimizer.zero_grad()
                 cf_total_loss += cf_batch_loss.item()
@@ -103,13 +104,14 @@ class KGAT(KGGraphRecommender):
                     print('CF Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch,  cf_batch_loss.item(), cf_total_loss / (n+1)))
             
             # Learn knowledge grap
-            for n, batch in enumerate(next_batch_kg(kg_data, kg_dict, self.batchSizeKG)):
+            for n, batch in enumerate(next_batch_kg(self.data_kg, self.batchSizeKG, device=device)):
                 kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail = batch
                 
                 kg_batch_loss = self.model.calc_kg_loss(kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail)
                 if np.isnan(kg_batch_loss.cpu().detach().numpy()):
                     print('ERROR (KG Training): Epoch {:04d} Iter {:04d} / {:04d} Loss is nan.'.format(ep, n, n_kg_batch))
                 kg_batch_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 4)
                 kg_optimizer.step()
                 kg_optimizer.zero_grad()
                 kg_total_loss += kg_batch_loss.item()
@@ -117,11 +119,11 @@ class KGAT(KGGraphRecommender):
                 kg_losses.append(kg_batch_loss.item())
                 if (n % 10) == 0:
                     print('KG Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_kg_batch,  kg_batch_loss.item(), kg_total_loss / (n+1)))
-
+            
             # Learn attention 
-            h_list = self.data_kg.h_list.cuda()
-            t_list = self.data_kg.t_list.cuda()
-            r_list = self.data_kg.r_list.cuda()
+            h_list = self.data_kg.h_list.to(device)
+            t_list = self.data_kg.t_list.to(device)
+            r_list = self.data_kg.r_list.to(device)
             relations = list(self.data_kg.laplacian_dict.keys())
             self.model.update_attention(h_list, t_list, r_list, relations)
             self.model.eval()
@@ -130,11 +132,21 @@ class KGAT(KGGraphRecommender):
             kg_loss = np.mean(kg_losses)
             train_loss = cf_loss + kg_loss
 
+            scheduler_cf.step(cf_loss)
+            scheduler_kg.step(kg_loss)
+
             with torch.no_grad():
                 entity_emb = self.model.calc_cf_embeddings()
                 user_emb = entity_emb[self.model.user_indices]
                 item_emb = entity_emb[self.model.item_indices]
                 data_ep = self.fast_evaluation(self.model, ep, user_emb, item_emb)
+
+                cur_recall =  float(data_ep[2].split(':')[1])
+                recall_list.append(cur_recall)
+                best_recall, should_stop = early_stopping(recall_list, self.stopping_steps)
+
+            if should_stop:
+                break
             
             self.save_performance_row(ep, data_ep)
             self.save_loss_row([ep, train_loss, cf_loss, kg_loss])
@@ -212,13 +224,11 @@ class Aggregator(nn.Module):
         return embeddings
 
 class KGATEncoder(nn.Module):
-
     def __init__(self, args, data_kg, A_in=None, user_pre_embed=None, item_pre_embed=None):
-
         super(KGATEncoder, self).__init__()
         
-        self.user_indices = torch.LongTensor(list(data_kg.userent.keys())).cuda()
-        self.item_indices =  torch.LongTensor(list(data_kg.itement.keys())).cuda()
+        self.user_indices = torch.LongTensor(list(data_kg.userent.keys())).to(device)
+        self.item_indices =  torch.LongTensor(list(data_kg.itement.keys())).to(device)
         
         self.use_pretrain = 1
         
@@ -237,9 +247,11 @@ class KGATEncoder(nn.Module):
         self.kg_l2loss_lambda = args['reg_kg']
         self.cf_l2loss_lambda = args['reg']
 
-        self.entity_user_embed = nn.Embedding(self.n_users_entities, self.embed_dim).cuda()
-        self.relation_embed = nn.Embedding(self.n_relations, self.relation_dim).cuda()
-        self.trans_M = nn.Parameter(torch.Tensor(self.n_relations, self.embed_dim, self.relation_dim)).cuda()
+        self.alpha = args['alpha']
+
+        self.entity_user_embed = nn.Embedding(self.n_users_entities, self.embed_dim).to(device)
+        self.relation_embed = nn.Embedding(self.n_relations, self.relation_dim).to(device)
+        self.trans_M = nn.Parameter(torch.Tensor(self.n_relations, self.embed_dim, self.relation_dim)).to(device)
 
         self.all_user_idx = list(data_kg.userent.keys())
         self.all_item_idx =  list(data_kg.itement.keys())
@@ -257,7 +269,7 @@ class KGATEncoder(nn.Module):
 
         self.aggregator_layers = nn.ModuleList()
         for k in range(self.n_layers):
-            self.aggregator_layers.append(Aggregator(self.conv_dim_list[k], self.conv_dim_list[k + 1], self.mess_dropout[k], self.aggregation_type).cuda())
+            self.aggregator_layers.append(Aggregator(self.conv_dim_list[k], self.conv_dim_list[k + 1], self.mess_dropout[k], self.aggregation_type).to(device))
 
         self.A_in = nn.Parameter(torch.sparse.FloatTensor(self.n_users_entities, self.n_users_entities))
         if A_in is not None:
@@ -269,7 +281,7 @@ class KGATEncoder(nn.Module):
         all_embed = [ego_embed]
 
         for idx, layer in enumerate(self.aggregator_layers):
-            ego_embed = layer(ego_embed, self.A_in.cuda())
+            ego_embed = layer(ego_embed, self.A_in.to(device))
             norm_embed = F.normalize(ego_embed, p=2, dim=1)
             all_embed.append(norm_embed)
 
@@ -324,7 +336,7 @@ class KGATEncoder(nn.Module):
         kg_loss = torch.mean(kg_loss)
 
         l2_loss = L2_loss_mean(r_mul_h) + L2_loss_mean(r_embed) + L2_loss_mean(r_mul_pos_t) + L2_loss_mean(r_mul_neg_t)
-        loss = kg_loss + self.kg_l2loss_lambda * l2_loss
+        loss = self.alpha * (kg_loss + self.kg_l2loss_lambda * l2_loss)
         return loss
 
     def update_attention_batch(self, h_list, t_list, r_idx):

@@ -254,6 +254,5 @@ def test(data, data_kg, user_emb, item_emb, max_N):
             process_bar(i, user_count)
     process_bar(user_count, user_count)
     print('')
-    print(rec_list)
     return rec_list
 
