@@ -1,3 +1,4 @@
+import torch 
 import numpy as np
 import random
 import scipy.sparse as sp
@@ -39,7 +40,28 @@ class GraphAugmentor(object):
         edges = np.ones_like(user_np, dtype=np.float32)
         dropped_adj = sp.csr_matrix((edges, (user_np, item_np)), shape=adj_shape)
         return dropped_adj
+    
+    @staticmethod
+    def edge_dropout_index(edge_index, drop_rate):
+        aug_edge_index1 = drop_edges(edge_index, drop_rate)
+        aug_edge_index2 = drop_edges(edge_index, drop_rate)
+        return (aug_edge_index1, aug_edge_index2)
 
+def drop_edges(edge_index, aug_ratio=0.4):
+    # This function will randomly drop some edges of the original graph to generate a variant augmented graph.
+    num_edges = len(edge_index[0])
+    drop_num = int(num_edges * aug_ratio)
+
+    idx_perm = np.random.permutation(num_edges)
+    edge_idx1 = edge_index[0][idx_perm]
+    edge_idx2 = edge_index[1][idx_perm]
+
+    edges_keep1 = edge_idx1[drop_num:]
+    edges_keep2 = edge_idx2[drop_num:]
+
+    aug_edge_index = torch.stack([edges_keep1, edges_keep2], dim=0)
+
+    return aug_edge_index
 
 class SequenceAugmentor(object):
     def __init__(self):
@@ -73,3 +95,4 @@ class SequenceAugmentor(object):
             to_be_masked = random.sample(range(seq_len[i]), floor(seq_len[i]*mask_ratio))
             augmented_seq[i, to_be_masked] = mask_idx
         return augmented_seq
+

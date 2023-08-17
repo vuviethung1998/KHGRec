@@ -4,6 +4,7 @@ from scipy.sparse.linalg import eigs
 from data.data import Data
 from data.graph import Graph
 import scipy.sparse as sp
+import torch
 
 class InteractionKG(Data, Graph):
     def __init__(self, conf, training, test):
@@ -153,7 +154,7 @@ class Interaction(Data,Graph):
         self.ui_adj = self.__create_sparse_bipartite_adjacency()
         self.norm_adj = self.normalize_graph_mat(self.ui_adj)
         
-        self.interaction_mat, self.inv_interaction_mat = self.__create_sparse_interaction_matrix()
+        self.edge_index, self.edge_index_t, self.interaction_mat, self.inv_interaction_mat = self.__create_sparse_interaction_matrix()
         # self.hyperedge_adj = self.__create_sparse_hyperedge_adj()
         # self.hypervertex_adj = self.__create_sparse_hypervertex_adj()
         
@@ -236,9 +237,12 @@ class Interaction(Data,Graph):
             row += [self.user[pair[0]]]
             col += [self.item[pair[1]]]
             entries += [1.0]
+        edge_index = torch.LongTensor([row, col])
+        edge_index_t = torch.LongTensor([col, row])
+
         interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_users,self.n_items),dtype=np.float32)
         inv_interaction_mat = sp.csr_matrix((entries, (col, row)), shape=(self.n_items, self.n_users), dtype=np.float32)
-        return interaction_mat, inv_interaction_mat
+        return edge_index, edge_index_t, interaction_mat, inv_interaction_mat
             
     def get_user_id(self, u):
         if u in self.user:
