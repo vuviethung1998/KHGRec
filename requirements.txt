@@ -1,7 +1,8 @@
+-f https://download.pytorch.org/whl/torch_stable.html
 -f https://pytorch-geometric.com/whl/torch-1.12.1+cu113.html
-torch==1.12.1
-torchvision==0.13.1 
-torchaudio==0.12.1
+torch==1.12.1+cu113
+torchvision==0.13.1+cu113 
+torchaudio==0.12.1+cu113 
 torch-geometric
 numba>=0.53.1
 pandas
