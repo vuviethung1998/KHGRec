@@ -8,8 +8,10 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Process some integers.")
 
     # Add the arguments
-    parser.add_argument('--model', type=str, default='KGAT',
+    parser.add_argument('--model', type=str, default='HGNN',
                         help='Model name')
+    parser.add_argument('--gpu_id', type=int, default=0,
+                        help='GPU')
     parser.add_argument('--dataset', type=str, default='lastfm', choices=['lastfm', 'amazon_books', 'ml-1m'],
                         help='Dataset name')
     parser.add_argument('--seed', type=int, default=123,
@@ -36,8 +38,33 @@ def parse_arguments():
                         help='relation_dim')
     parser.add_argument('--hyper_dim', type=int, default=128,
                         help='hyper_dim')
-    parser.add_argument('--lr_decay', type=float, default=0.5,
+    parser.add_argument('--lr_decay', type=float, default=0.7,
                         help='lr_decay')
+
+    parser.add_argument('--reg', type=float, default=0.1,
+                        help='Lambda when calculating KG l2 loss.')
+    parser.add_argument('--reg_kg', type=float, default=0.1,
+                        help='Lambda when calculating CF l2 loss.')
+    
+    parser.add_argument('--p', type=float, default=0.3,
+                        help='Leaky')
+    parser.add_argument('--drop_rate', type=float, default=0.3,
+                        help='Drop rate')
+    parser.add_argument('--temp', type=float, default=0.1,
+                        help='Contrastive rate')
+    parser.add_argument('--cl_rate', type=float, default=0.01,
+                        help='Contrastive rate')
+    # parser.add_argument('--use_contrastive', action='store_true',
+    #                     help='Active to perform contrastive learning')
+    # parser.add_argument('--use_attention', action='store_true',
+    #                     help='Active to perform attention feature fusion')
+    parser.add_argument('--mode',
+                    default='full',
+                    choices=['full', 'wo_attention', 'wo_ssl'],
+                    help='Mode')
+    parser.add_argument('--aug_type', type=int, default=1,
+                        help='Aug type')
+    
     parser.add_argument('--laplacian_type', type=str, default='random-walk',
                         help='Specify the type of the adjacency (laplacian) matrix from {symmetric, random-walk}.')
     parser.add_argument('--aggregation_type', type=str, default='bi-interaction',
@@ -47,21 +74,14 @@ def parse_arguments():
     parser.add_argument('--mess_dropout', nargs='?', default='[0.1, 0.1, 0.1]',
                         help='Dropout probability w.r.t. message dropout for each deep layer. 0: no dropout.')
 
-    parser.add_argument('--reg', type=float, default=1e-3,
-                        help='Lambda when calculating KG l2 loss.')
-    parser.add_argument('--reg_kg', type=float, default=1e-3,
-                        help='Lambda when calculating CF l2 loss.')
-    
-    parser.add_argument('--stopping_steps', type=int, default=20,
+    parser.add_argument('--stopping_steps', type=int, default=10,
                         help='Early stop.')
-
     parser.add_argument('--cf_print_every', type=int, default=1,
                         help='Iter interval of printing CF loss.')
     parser.add_argument('--kg_print_every', type=int, default=1,
                         help='Iter interval of printing KG loss.')
     parser.add_argument('--evaluate_every', type=int, default=10,
                         help='Epoch interval of evaluating CF.')
-
     # Parse the arguments
     args = parser.parse_args()
     return args
@@ -108,4 +128,3 @@ if __name__ == '__main__':
     rec.execute()
     e = time.time()
     print("Running time: %f s" % (e - s))
-

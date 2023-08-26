@@ -1,15 +1,19 @@
 -f https://download.pytorch.org/whl/torch_stable.html
 -f https://pytorch-geometric.com/whl/torch-1.12.1+cu113.html
-torch==1.12.1+cu113
+# torch==1.12.1+cu113
 torchvision==0.13.1+cu113 
 torchaudio==0.12.1+cu113 
 torch-geometric
-numba>=0.53.1
-pandas
-protobuf>=3.11
-numpy>=1.21
-scipy>=1.4.1
+torch_sparse
+torch_scatter
+torch_cluster
+torch_spline_conv
+# numba>=0.53.1
+# pandas
+# protobuf>=3.11
+# numpy>=1.21
+# scipy>=1.4.1
 # tensorflow>=2.2.0
-pyyaml > 3.13
-dgl>=1.1.0
-jupyterlab
+# pyyaml > 3.13
+# dgl>=1.1.0
+# jupyterlab

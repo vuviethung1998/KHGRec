@@ -4,6 +4,153 @@ from util.torch_interface import TorchGraphInterface
 import torch
 import random 
 
+def next_batch_unified(data, data_kg, batch_size, batch_size_kg, n_negs=1, device=None):
+    ptr = 0
+    cf_data = np.array(data.training_data)
+    kg_data = data_kg.kg_train_data.to_numpy()
+    
+    cf_size = len(cf_data)
+    # data_size = len(kg_data)
+
+    shuffle(kg_data)
+    shuffle(cf_data)
+    
+    lst_user_item = list(set(list(cf_data[:,0]) + list(cf_data[:,1])))
+    train_kg_dict = {k: data_kg.train_kg_dict[k] for k in lst_user_item}
+
+    exist_heads= train_kg_dict.keys()
+    h_list = list(exist_heads)
+    h_dict = {value: idx for idx, value in enumerate(h_list)}
+    all_tails = []
+    pos_tail_sets = {}
+    for head, tails in train_kg_dict.items():
+        all_tails += [it[0] for it in tails] 
+        pos_tail_sets[head] =  set([it[0] for it in tails])
+    all_tails = list(set(all_tails))
+    
+    while ptr < cf_size:
+        if ptr + batch_size < cf_size:
+            batch_end = ptr + batch_size
+        else:   
+            batch_end = cf_size
+            
+        users = cf_data[ptr:batch_end, 0]
+        items = cf_data[ptr:batch_end, 1]
+        
+        ptr = batch_end
+        
+        # select random items
+        u_idx, i_idx, j_idx = [], [], []
+        item_list = list(data.item.keys())
+        for i, user in enumerate(users):
+            i_idx.append(data.item[items[i]])
+            u_idx.append(data.user[user])
+            for m in range(n_negs):
+                neg_item = choice(item_list)
+                while neg_item in data.training_set_u[user]:
+                    neg_item = choice(item_list)
+                j_idx.append(data.item[neg_item])
+
+        u_idx  = torch.LongTensor(u_idx).to(device)
+        i_idx  = torch.LongTensor(i_idx).to(device)
+        j_idx  = torch.LongTensor(j_idx).to(device)
+        
+        # selected entities 
+        h_idx, r_idx, pos_t_idx, neg_t_idx = [], [], [], []
+        selected_kg_data = []
+        
+        for i, h in enumerate(train_kg_dict.keys()):
+            lst_values = train_kg_dict[h]
+            for val in lst_values:
+                selected_kg_data.append([int(h), val[1], val[0]])
+        
+        selected_kg_data = np.array(selected_kg_data)
+        selected_indices  = np.random.randint(len(selected_kg_data), size=batch_size_kg)
+        selected_kg_data = selected_kg_data[selected_indices, :]
+
+        heads, relations, tails  = selected_kg_data[:,0], selected_kg_data[:,1], selected_kg_data[:,2]
+        # time1 = datetime.datetime.now()
+        h_idx.extend([int(h) for h in heads])
+        r_idx.extend([int(rel) for rel in relations])
+        pos_t_idx.extend([int(tail) for tail in tails])
+
+        for head in heads:
+            neg_t = random.choice(all_tails)
+            while neg_t in pos_tail_sets[head]:
+                neg_t = random.choice(all_tails)
+            neg_t_idx.append(neg_t)
+
+        h_idx  = torch.LongTensor(h_idx).to(device)
+        r_idx  = torch.LongTensor(r_idx).to(device)
+        neg_t_idx  = torch.LongTensor(neg_t_idx).to(device)
+        yield u_idx, i_idx, j_idx, h_idx, r_idx, pos_t_idx, neg_t_idx
+        
+def next_batch_unified_(data, data_kg, batch_size, batch_size_kg, n_negs=1, device=None):
+    ptr = 0
+
+    cf_data = data.training_data
+    kg_data = data_kg.kg_train_data.to_numpy()
+    
+    cf_size = len(cf_data)
+    data_size = len(kg_data)
+
+    shuffle(kg_data)
+    shuffle(cf_data)
+    
+    kg_dict = data_kg.train_kg_dict
+    exist_heads= kg_dict.keys()
+    h_list = list(exist_heads)
+    h_dict = {value: idx for idx, value in enumerate(h_list)}
+    all_tails = list(set(kg_data[:,2]))
+    # Pre-compute positive tail sets and negative tails for each head
+    pos_tail_sets = {head: set([it[0] for it in tails]) for head, tails in kg_dict.items()}
+    
+    while ptr < data_size:
+        if ptr + batch_size_kg < data_size:
+            batch_end = ptr + batch_size_kg
+        else:   
+            batch_end = data_size
+        
+        heads, relations, tails = kg_data[ptr:batch_end, 0], kg_data[ptr:batch_end, 1], kg_data[ptr:batch_end, 2]
+        
+        ptr = batch_end
+        h_idx, r_idx, pos_t_idx, neg_t_idx = [], [], [], []
+        # time1 = datetime.datetime.now()
+        h_idx = [h_dict[head] for head in heads]
+        
+        r_idx.extend([int(rel) for rel in relations])
+        pos_t_idx.extend([int(tail) for tail in tails])
+        for head in heads:
+            neg_t = random.choice(all_tails)
+            while neg_t in pos_tail_sets[head]:
+                neg_t = random.choice(all_tails)
+            neg_t_idx.append(neg_t)
+        # select random items
+        selected_indices = np.random.choice(cf_size, batch_size)
+        users = [cf_data[idx][0] for idx in selected_indices]
+        items = [cf_data[idx][1] for idx in selected_indices]
+
+        # select random items
+        u_idx, i_idx, j_idx = [], [], []
+        item_list = list(data.item.keys())
+        for i, user in enumerate(users):
+            i_idx.append(data.item[items[i]])
+            u_idx.append(data.user[user])
+            for m in range(n_negs):
+                neg_item = choice(item_list)
+                while neg_item in data.training_set_u[user]:
+                    neg_item = choice(item_list)
+                j_idx.append(data.item[neg_item])
+
+        u_idx  = torch.LongTensor(u_idx).to(device)
+        i_idx  = torch.LongTensor(i_idx).to(device)
+        j_idx  = torch.LongTensor(j_idx).to(device)
+
+        h_idx  = torch.LongTensor(h_idx).to(device)
+        r_idx  = torch.LongTensor(r_idx).to(device)
+        neg_t_idx  = torch.LongTensor(neg_t_idx).to(device)
+        yield u_idx, i_idx, j_idx, h_idx, r_idx, pos_t_idx, neg_t_idx
+
 def next_batch_kg(rec, batch_size):
     # sample data for KG
     def sample_pos_triples_for_h(kg_dict, head, n_sample_pos_triples):
