@@ -1,5 +1,6 @@
 from tqdm import tqdm
 import os 
+import pandas as pd 
 import torch
 import torch.nn as nn 
 import torch.nn.functional as F
@@ -295,7 +296,6 @@ class HGNNModel(nn.Module):
                 dropped_adj_ = self.random_graph_augment()
                 dropped_adj.append(dropped_adj_)
         return dropped_adj
-
 
     def random_graph_augment(self):
         dropped_mat = None
