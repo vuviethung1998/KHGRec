@@ -32,18 +32,17 @@ class HGNN(GraphRecommender):
         self.device = torch.device(f"cuda:{kwargs['gpu_id']}" if torch.cuda.is_available() else 'cpu')
         self._parse_config( kwargs)
         self.set_seed()
-        
         self.model = HGNNModel(self.data, self.data_kg, kwargs, self.device).to(self.device)
         
         self.attention_user = Attention(in_size=self.hyper_dim, hidden_size=self.hyper_dim).to(self.device)
         self.attention_item = Attention(in_size=self.hyper_dim, hidden_size=self.hyper_dim).to(self.device)
-
+        
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lRate)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay,patience=5)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay, patience=5)
 
     def _parse_config(self, kwargs):
         self.dataset = kwargs['dataset']
-
+        
         self.lRate = float(kwargs['lrate'])
         self.lr_decay = float(kwargs['lr_decay'])
         self.maxEpoch = int(kwargs['max_epoch'])
@@ -60,6 +59,7 @@ class HGNN(GraphRecommender):
         self.temp = kwargs['temp']
         self.seed = kwargs['seed']
         self.mode = kwargs['mode']
+        self.early_stopping_steps = kwargs['stopping_steps']
         
         if self.mode == 'full':
             self.use_contrastive = True
@@ -203,7 +203,7 @@ class HGNN(GraphRecommender):
             
                 cur_recall =  float(data_ep[2].split(':')[1])
                 recall_list.append(cur_recall)
-                best_recall, should_stop = early_stopping(recall_list, 20)
+                best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
                 
                 if should_stop:
                     break 

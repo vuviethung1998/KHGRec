@@ -8,6 +8,7 @@ from util.sampler import next_batch_pairwise_kg, next_batch_pairwise
 from util.loss_torch import bpr_loss, l2_reg_loss, EmbLoss, contrastLoss
 from util.init import *
 from base.torch_interface import TorchGraphInterface
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

@@ -19,8 +19,10 @@ def next_batch_unified(data, data_kg, batch_size, batch_size_kg, n_negs=1, devic
     train_kg_dict = {k: data_kg.train_kg_dict[k] for k in lst_user_item}
 
     exist_heads= train_kg_dict.keys()
+    
     h_list = list(exist_heads)
     h_dict = {value: idx for idx, value in enumerate(h_list)}
+    
     all_tails = []
     pos_tail_sets = {}
     for head, tails in train_kg_dict.items():
@@ -70,7 +72,8 @@ def next_batch_unified(data, data_kg, batch_size, batch_size_kg, n_negs=1, devic
 
         heads, relations, tails  = selected_kg_data[:,0], selected_kg_data[:,1], selected_kg_data[:,2]
         # time1 = datetime.datetime.now()
-        h_idx.extend([int(h) for h in heads])
+        
+        h_idx.extend([h_dict[int(h)] for h in heads])
         r_idx.extend([int(rel) for rel in relations])
         pos_t_idx.extend([int(tail) for tail in tails])
 
