@@ -38,7 +38,7 @@ class HGNN(GraphRecommender):
         self.attention_item = Attention(in_size=self.hyper_dim, hidden_size=self.hyper_dim).to(self.device)
 
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lRate)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay,patience=5)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay, patience=5)
 
     def _parse_config(self, kwargs):
         self.dataset = kwargs['dataset']
@@ -59,6 +59,7 @@ class HGNN(GraphRecommender):
         self.temp = kwargs['temp']
         self.seed = kwargs['seed']
         self.mode = kwargs['mode']
+        self.early_stopping_steps = kwargs['stopping_steps']
         
         if self.mode == 'full':
             self.use_contrastive = True
@@ -202,7 +203,7 @@ class HGNN(GraphRecommender):
             
                 cur_recall =  float(data_ep[2].split(':')[1])
                 recall_list.append(cur_recall)
-                best_recall, should_stop = early_stopping(recall_list, 20)
+                best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
                 
                 if should_stop:
                     break 

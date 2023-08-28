@@ -26,9 +26,9 @@ class GraphRecommender(Recommender):
         self.topN = [int(num) for num in top]
         self.max_N = max(self.topN)        
         if conf['model.name'] == 'HGNN':
-            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-inp_emb:{conf['input.size']}-hyper_emb:{conf['hyper.size']}-bs:{conf['batch_size']}-lr:{conf['learnRate']}-lrd:{conf['learnRateDecay']}-reg:{conf['reg.lambda']}-leaky:{conf['leaky']}-dropout:{conf['dropout']}-n_layers:{conf['gnn_layer']}-temp:{conf['temp']}-cl_rate:{conf['cl_rate']}/"
+            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-temp:{kwargs['temp']}-cl_rate:{kwargs['cl_rate']}/"
         else:
-            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-bs:{conf['batch_size']}-lr:{conf['learnRate']}-lrd:{conf['learnRateDecay']}-reg:{conf['reg.lambda']}-n_layers:{conf['gnn_layer']}"
+            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-reg:{kwargs['reg']}-n_layers:{kwargs['n_layers']}"
         if not os.path.exists(self.output):
             os.makedirs(self.output)
 

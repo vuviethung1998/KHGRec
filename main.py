@@ -18,13 +18,13 @@ def parse_arguments():
                         help='seed')
     parser.add_argument('--alpha', type=float, default=1,
                         help='KG loss pct')
-    parser.add_argument('--lrate', type=float, default=0.001,
+    parser.add_argument('--lrate', type=float, default=0.01,
                         help='Lrate')
     parser.add_argument('--lratekg', type=float, default=0.001,
                         help='Lrate KG')
     parser.add_argument('--max_epoch', type=int, default=500,
                         help='Max Epoch')
-    parser.add_argument('--batch_size', type=int, default=2048,
+    parser.add_argument('--batch_size', type=int, default=8192,
                         help='Batch size')
     parser.add_argument('--batch_size_kg', type=int, default=8192,
                         help='Batch size KG')
@@ -74,7 +74,7 @@ def parse_arguments():
     parser.add_argument('--mess_dropout', nargs='?', default='[0.1, 0.1, 0.1]',
                         help='Dropout probability w.r.t. message dropout for each deep layer. 0: no dropout.')
 
-    parser.add_argument('--stopping_steps', type=int, default=10,
+    parser.add_argument('--stopping_steps', type=int, default=20,
                         help='Early stop.')
     parser.add_argument('--cf_print_every', type=int, default=1,
                         help='Iter interval of printing CF loss.')
