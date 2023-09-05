@@ -20,7 +20,6 @@ class GraphRecommender(Recommender):
         self.data = Interaction(conf, training_set, test_set)
         if self.knowledge:
             self.data_kg = Knowledge(conf, training_set, test_set, knowledge_set)
-
         self.bestPerformance = []
         top = self.ranking['-topN'].split(',')
         self.topN = [int(num) for num in top]

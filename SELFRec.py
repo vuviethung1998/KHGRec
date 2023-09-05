@@ -6,6 +6,7 @@ class SELFRec(object):
         self.feature_data = []
         self.config = config
         default_dir = f"./dataset/{config['dataset']}/"
+        print(default_dir)
         self.training_data = FileIO.load_data_set(default_dir + config['training.set'], config['model.type'])
         self.test_data = FileIO.load_data_set(default_dir + config['test.set'], config['model.type'])
         self.knowledge_data = FileIO.load_kg_data(default_dir + f"{config['dataset']}.kg")
@@ -13,9 +14,9 @@ class SELFRec(object):
         self.kwargs = {}
         if args:
             self.kwargs = args 
-        if config.contain('social.data'):
-            social_data = FileIO.load_social_data(self.config['social.data'])
-            self.kwargs['social.data'] = social_data
+        # if config.contain('social.data'):
+        #     social_data = FileIO.load_social_data(self.config['social.data'])
+        #     self.kwargs['social.data'] = social_data
         print('Reading data and preprocessing...')
 
     def execute(self):
@@ -24,3 +25,5 @@ class SELFRec(object):
         exec(import_str)
         recommender = self.config['model.name'] + '(self.config,self.training_data,self.test_data,self.knowledge_data,**self.kwargs)'
         eval(recommender).execute()
+
+

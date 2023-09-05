@@ -5,10 +5,10 @@ import collections
 from collections import defaultdict
 import torch
 import scipy.sparse as sp
-
+from data.graph import Graph
 from data.ui_graph import Interaction
 
-class Knowledge(Interaction):
+class Knowledge(Interaction, Graph):
     def __init__(self, conf, training, test, knowledge):
         super().__init__(conf, training, test)
         self.conf = conf 
@@ -39,8 +39,7 @@ class Knowledge(Interaction):
         self.create_laplacian_dict()
         
         self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
-        self.interaction_mat = self.__create_sparse_interaction_matrix()
-        
+        self.norm_kg_adj = self.normalize_graph_mat(self.kg_interaction_mat)
         
     def construct_data(self):
         kg_data = self.kg_data
