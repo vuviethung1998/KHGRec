@@ -11,8 +11,8 @@ from util.sampler import next_batch_pairwise
 from base.torch_interface import TorchGraphInterface
 from util.loss_torch import bpr_loss,l2_reg_loss
 from util.evaluation import early_stopping
-from model.layers.HypergraphConv import HypergraphConv
-# from torch_geometric.nn import HypergraphConv
+# from model.layers.HypergraphConv import HypergraphConv
+from torch_geometric.nn import HypergraphConv
 
 class HGCN(GraphRecommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
@@ -118,8 +118,7 @@ class HGCN_Encoder(nn.Module):
         self.act = nn.LeakyReLU(leaky)
         self.dropout = nn.Dropout(drop_rate)
 
-        self.hgnn_layer_u = SelfAwareHGCNConv(leaky=leaky, dropout=drop_rate, n_layers=3, nheads=nheads, input_dim=self.latent_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
-        self.hgnn_layer_i = SelfAwareHGCNConv(leaky=leaky, dropout=drop_rate, n_layers=3, nheads=nheads, input_dim=self.latent_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
+        self.hgnn_layer = SelfAwareHGCNConv(leaky=leaky, dropout=drop_rate, n_layers=2, nheads=nheads, input_dim=self.latent_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
 
     def _init_model(self):
         initializer = nn.init.xavier_uniform_
@@ -132,11 +131,11 @@ class HGCN_Encoder(nn.Module):
     def forward(self):
         self.user_emb =  self.embedding_dict['user_emb']
         self.item_emb = self.embedding_dict['item_emb']
-        # ego_embeddings = torch.cat([self.user_emb, self.item_emb], 0)
-        hyperULat = self.hgnn_layer_u(self.user_emb, self.edge_index, hyperedge_attr=None)
-        hyperILat = self.hgnn_layer_i(self.item_emb, self.edge_index_t, hyperedge_attr=None)
-        # user_all_embeddings = ego_embeddings[:self.data.n_users]
-        # item_all_embeddings = ego_embeddings[self.data.n_users:]
+        ego_embedings = torch.cat([self.user_emb, self.item_emb], 0)
+        
+        hyperLat = self.hgnn_layer(ego_embedings, self.edge_index)
+        hyperULat = hyperLat[:self.data.n_users]
+        hyperILat = hyperLat[self.data.n_users:]
         return hyperULat, hyperILat
 
 class HGCNConv(nn.Module):
@@ -169,18 +168,19 @@ class SelfAwareHGCNConv(nn.Module):
         for i in range(n_layers):
             first_channels = input_dim if i == 0 else hidden_dim
             second_channels = hyper_dim if i == n_layers - 1 else hidden_dim
-            self.convs.append(HypergraphConv(first_channels, second_channels, use_attention=False, heads=nheads, attention_mode=att_mode,\
+            self.convs.append(HypergraphConv(first_channels, second_channels, use_attention=False, heads=nheads,\
                                             concat=False, negative_slope=leaky, dropout=dropout, bias=bias))
             self.lns.append(torch.nn.LayerNorm(second_channels))
             self.residuals.append(nn.Linear(input_dim, second_channels).cuda())
-    def forward(self, inp, adj, hyperedge_attr=None):
+            
+    def forward(self, inp, adj):
         embs = inp
         for i, conv in enumerate(self.convs):
             residual = self.residuals[i](inp)
             if i != self.n_layers - 1:
-                embs = self.act(self.lns[i](conv(embs, adj, hyperedge_attr))) + residual
+                embs = self.act(self.lns[i](conv(embs, adj))) + residual
             else:
-                embs = self.lns[i](conv(embs, adj, hyperedge_attr)) + residual
+                embs = self.lns[i](conv(embs, adj)) + residual
         return embs 
 
 class SpAdjDropEdge(nn.Module):
