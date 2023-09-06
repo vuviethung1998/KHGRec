@@ -1,7 +1,15 @@
-python main.py --dataset=ml-1m --mode=full --lrate=0.003 --n_layers=2 --reg=0.3 --reg_kg=0.3 --p=0.3 --drop_rate=0.3 --temp=0.1 --cl_rate=0.1
-python main.py --dataset=ml-1m --mode=full --lrate=0.003 --n_layers=2 --reg=0.1 --reg_kg=0.1 --p=0.3 --drop_rate=0.3 --temp=0.1 --cl_rate=0.3
-python main.py --dataset=ml-1m --mode=full --lrate=0.003 --n_layers=2 --reg=0.1 --reg_kg=0.1 --p=0.3 --drop_rate=0.3 --temp=0.3 --cl_rate=0.01
-python main.py --dataset=ml-1m --mode=full --lrate=0.003 --n_layers=2 --reg=0.1 --reg_kg=0.1 --p=0.3 --drop_rate=0.3 --temp=1 --cl_rate=0.01
-python main.py --dataset=ml-1m --mode=full --lrate=0.003 --n_layers=2 --reg=0.1 --reg_kg=0.1 --p=0.3 --drop_rate=0.3 --temp=10 --cl_rate=0.01
-python main.py --dataset=ml-1m --mode=full --lrate=0.003 --n_layers=1 --reg=0.1 --reg_kg=0.1 --p=0.3 --drop_rate=0.3 --temp=0.1 --cl_rate=0.01
-python main.py --dataset=ml-1m --mode=full --lrate=0.003 --n_layers=3 --reg=0.1 --reg_kg=0.1 --p=0.3 --drop_rate=0.3 --temp=0.1 --cl_rate=0.01
+python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-7 --reg=0.1 
+python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-6 --reg=0.1
+python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-5 --reg=0.1
+python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-4 --reg=0.1
+python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-3 --reg=0.1
+python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-7 --reg=0.01
+python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-7 --reg=0.001
+python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-7 --reg=0.0001
+python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-7 --reg=0.00001
+python main.py  --model=HGCN --lrate=0.01 --weight_decay=5e-7 --reg=0.1
+python main.py  --model=HGCN --lrate=0.002 --weight_decay=5e-7 --reg=0.1
+python main.py  --model=HGCN --lrate=0.005 --weight_decay=5e-7 --reg=0.1
+python main.py  --model=HGCN --lrate=0.0005 --weight_decay=5e-7 --reg=0.1
+python main.py  --model=HGCN --lrate=0.0001 --weight_decay=5e-7 --reg=0.1
+python main.py  --model=HGCN --lrate=0.0002 --weight_decay=5e-7 --reg=0.1

@@ -27,7 +27,7 @@ class GraphRecommender(Recommender):
         if conf['model.name'] == 'HGNN':
             self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-temp:{kwargs['temp']}-cl_rate:{kwargs['cl_rate']}/"
         else:
-            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-reg:{kwargs['reg']}-n_layers:{kwargs['n_layers']}"
+            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-wdecay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}"
         if not os.path.exists(self.output):
             os.makedirs(self.output)
 
@@ -92,7 +92,7 @@ class GraphRecommender(Recommender):
             self.recOutput.append(line)
         current_time = strftime("%Y-%m-%d %H-%M-%S", localtime(time.time()))
         # output prediction result
-        out_dir = self.output
+        out_dir = self.output + '/'
         # out_dir = self.output['-dir']
         # file_name = self.config['model.name'] + '@' + current_time + '-top-' + str(self.max_N) + 'items' + '.txt'
         file_name = self.config['model.name'] + '-top-' + str(self.max_N) + 'items' + '.txt'

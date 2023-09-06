@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 import random 
+from torch_geometric.nn import HypergraphConv
 
 from util.loss_torch import bpr_loss, EmbLoss, contrastLoss
 from util.init import *
@@ -19,6 +20,7 @@ from data.augmentor import GraphAugmentor
 from base.main_recommender import GraphRecommender
 from util.evaluation import early_stopping
 from util.sampler import next_batch_unified
+from data.augmentor import drop_edges
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
@@ -37,7 +39,7 @@ class HGNN(GraphRecommender):
         self.attention_item = Attention(in_size=self.hyper_dim, hidden_size=self.hyper_dim).to(self.device)
         
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lRate, weight_decay=self.weight_decay)
-        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay, patience=5)
+        self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay, patience=10)
 
     def _parse_config(self, kwargs):
         self.dataset = kwargs['dataset']
@@ -110,7 +112,6 @@ class HGNN(GraphRecommender):
             train_model.train()
             for n, batch in enumerate(next_batch_unified(self.data, self.data_kg, self.batchSize, self.batchSizeKG, device=self.device)):
                 user_idx, pos_idx, neg_idx, kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail = batch
-                import pdb; pdb.set_trace()
                 user_emb_cf, item_emb_cf = train_model(mode='cf', keep_rate=0.5)
 
                 ego_embed = train_model(mode='kg')
@@ -236,10 +237,14 @@ class HGNNModel(nn.Module):
         self.data_kg = data_kg 
         
         self.device = device
-        self.sparse_norm_adj  = TorchGraphInterface.convert_sparse_mat_to_tensor(data.norm_adj).to(self.device)
-        self.kg_adj = TorchGraphInterface.convert_sparse_mat_to_tensor(data_kg.kg_interaction_mat).to(self.device)
+        # self.sparse_norm_adj  = TorchGraphInterface.convert_sparse_mat_to_tensor(data.norm_adj).to(self.device)
+        # self.kg_adj = TorchGraphInterface.convert_sparse_mat_to_tensor(data_kg.kg_interaction_mat).to(self.device)
         
         self.device = device 
+
+        self.edge_index = data.edge_index.cuda()
+        self.edge_index_t = data.edge_index_t.cuda()
+
         self.user_indices =  torch.LongTensor(list(data.user.keys())).to(self.device)
         self.item_indices = torch.LongTensor(list(data.item.keys())).to(self.device)
         
@@ -249,21 +254,15 @@ class HGNNModel(nn.Module):
         self.hgnn_cf = []
         self.hgnn_kg  = []
         
-        for i in range(self.layers):
-            if i ==0:
-                self.hgnn_cf.append(HGCNConv(leaky=self.p, input_dim=self.input_dim, hyper_dim=self.hyper_dim, device=self.device))
-                self.hgnn_kg.append(HGCNConv(leaky=self.p, input_dim=self.input_dim, hyper_dim=self.hyper_dim, device=self.device))
-            else:
-                self.hgnn_cf.append(HGCNConv(leaky=self.p, input_dim=self.hyper_dim, hyper_dim=self.hyper_dim, device=self.device))
-                self.hgnn_kg.append(HGCNConv(leaky=self.p, input_dim=self.hyper_dim, hyper_dim=self.hyper_dim, device=self.device))
-
+        self.hgnn_layer_u = SelfAwareHGCNConv(leaky=self.p, dropout=self.drop_rate, n_layers=self.layers, nheads=self.nheads, input_dim=self.emb_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
+        self.hgnn_layer_i = SelfAwareHGCNConv(leaky=self.p, dropout=self.drop_rate, n_layers=self.layers, nheads=self.nheads, input_dim=self.emb_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
+        self.hgnn_layer_kg = SelfAwareHGCNConv(leaky=self.p, dropout=self.drop_rate, n_layers=self.layers, nheads=self.nheads, input_dim=self.emb_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
+        
         self.relation_emb = nn.Parameter(init.xavier_uniform_(torch.empty(self.data_kg.n_relations, self.input_dim))).to(self.device)
         self.trans_M = nn.Parameter(init.xavier_uniform_(torch.empty(self.data_kg.n_relations, self.hyper_dim, self.relation_dim))).to(self.device)
 
-        self.non_linear = nn.ReLU()
         self.act = nn.LeakyReLU(self.p)
         self.dropout = nn.Dropout(self.drop_rate)
-        self.edgeDropper = SpAdjDropEdge()
         
     def _parse_args(self, args):
         self.input_dim = args['input_dim']
@@ -274,6 +273,9 @@ class HGNNModel(nn.Module):
         self.temp = args['temp']
         self.aug_type = args['aug_type']
         self.relation_dim = args['relation_dim']
+        self.nheads = int(args['nheads'])
+        self.emb_size =  int(args['input_dim'])
+        self.hyper_size =  int(args['hyper_dim'])
         
     def _init_model(self):
         initializer = init.xavier_uniform_
@@ -283,33 +285,16 @@ class HGNNModel(nn.Module):
         })
         return embedding_dict
     
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            init.normal_(m.weight, std=0.01)
-            if m.bias is not None:
-                init.zeros_(m.bias)
-
     def calculate_cf_embeddings(self, keep_rate:float=1):
         uEmbed = self.embedding_dict['user_entity_emb'][self.user_indices] 
         iEmbed = self.embedding_dict['user_entity_emb'][self.item_indices]
-        embeds = torch.cat([uEmbed, iEmbed], 0)
-        all_embeddings = []
-        sparse_norm_adj = self.edgeDropper(self.sparse_norm_adj, keep_rate)
-        for k in range(self.layers):
-            if k== self.layers -1:
-                hyperLat = self.hgnn_cf[k](sparse_norm_adj, embeds, act=False)
-            else:
-                hyperLat = self.hgnn_cf[k](sparse_norm_adj, embeds)
-            if k!= 0:
-                embeds += hyperLat
-            else:
-                embeds = hyperLat
-            all_embeddings += [embeds] 
-        all_embeddings = torch.stack(all_embeddings, dim=1)
-        all_embeddings = torch.mean(all_embeddings, dim=1)
-        user_all_embeddings = all_embeddings[:self.data.n_users]
-        item_all_embeddings = all_embeddings[self.data.n_users:]
-        return user_all_embeddings, item_all_embeddings 
+        if self.use_drop_edge:
+            self.edge_index = drop_edges(self.edge_index, aug_ratio=1-keep_rate)
+            self.edge_index_t = drop_edges(self.edge_index_t, aug_ratio=1-keep_rate)
+
+        hyperULat = self.hgnn_layer_u(uEmbed, self.edge_index, hyperedge_attr=iEmbed)
+        hyperILat = self.hgnn_layer_i(iEmbed, self.edge_index_t, hyperedge_attr=uEmbed)
+        return hyperULat, hyperILat
 
     def calculate_kg_embeddings(self):
         embeds = self.embedding_dict['user_entity_emb']
@@ -408,18 +393,46 @@ class HGNNModel(nn.Module):
                     contrastLoss(embeds2[data.n_users:], embeds2[data.n_users:], torch.unique(poss), temp)
         return sslLoss
 
-class HGCNConv(nn.Module):
-    def __init__(self, leaky, input_dim, hyper_dim, device):
-        super(HGCNConv, self).__init__()
-        self.W= nn.Parameter(init.xavier_uniform_(torch.empty(input_dim, hyper_dim)),requires_grad=True).to(device)
-        self.bias = nn.Parameter(torch.empty(hyper_dim),requires_grad=True).to(device)
-        self.act = nn.LeakyReLU(negative_slope=leaky)
+class SelfAwareHGCNConv(nn.Module):
+    def __init__(self, leaky, dropout, n_layers, nheads, input_dim, hidden_dim, hyper_dim, att_mode='node', bias=True):
+        super(SelfAwareHGCNConv, self).__init__()
 
-    def forward(self, adj, embs, act=True):
-        if act:
-            return self.act(torch.sparse.mm(torch.sparse.mm(adj, torch.sparse.mm(adj.t(), embs)), self.W )+ self.bias )
-        else:
-            return torch.sparse.mm(torch.sparse.mm(adj, torch.sparse.mm(adj.t(), embs)), self.W )
+        self.input_dim = input_dim
+        self.hyper_dim = hyper_dim        
+        self.act = nn.LeakyReLU(negative_slope=leaky)
+        self.leaky = leaky 
+        self.dropout = dropout 
+        self.n_layers = n_layers
+
+        self.res_fc = nn.Linear(input_dim, hyper_dim).cuda()
+
+        self.convs = torch.nn.ModuleList()
+        self.lns = torch.nn.ModuleList()
+        self.residuals = torch.nn.ModuleList()
+        self.hyperedge_fc = torch.nn.ModuleList()
+
+        for i in range(n_layers):
+            first_channels = input_dim if i == 0 else hidden_dim
+            second_channels = hyper_dim if i == n_layers - 1 else hidden_dim
+            self.convs.append(HypergraphConv(first_channels, second_channels, use_attention=True, heads=nheads, attention_mode=att_mode,\
+                                            concat=False, negative_slope=leaky, dropout=dropout, bias=bias))
+            self.lns.append(torch.nn.LayerNorm(second_channels))
+            self.residuals.append(nn.Linear(input_dim, second_channels).cuda())
+            self.hyperedge_fc.append(nn.Linear(input_dim, first_channels).cuda())
+
+    def forward(self, inp, adj, hyperedge_attr=None):
+        embs = inp
+        for i, conv in enumerate(self.convs):
+            if i == 0:
+                hyperedge_attr_ = hyperedge_attr
+            else:
+                hyperedge_attr_ = self.hyperedge_fc[i](hyperedge_attr)
+            residual = self.residuals[i](inp)
+            if i != self.n_layers - 1:
+                embs = self.act(self.lns[i](conv(embs, adj, hyperedge_attr=hyperedge_attr_))) + residual
+            else:
+                embs = self.lns[i](conv(embs, adj, hyperedge_attr=hyperedge_attr_)) + residual
+        return embs 
 
 class Attention(nn.Module):
     # This class module is a simple attention layer.
