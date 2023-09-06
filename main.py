@@ -38,7 +38,7 @@ def parse_arguments():
                         help='hyper_dim')
     parser.add_argument('--lr_decay', type=float, default=0.7,
                         help='lr_decay')
-    parser.add_argument('--weight_decay', type=float, default=5e-5,
+    parser.add_argument('--weight_decay', type=float, default=5e-7,
                         help='weight_decay')
     parser.add_argument('--reg', type=float, default=0.1,
                         help='Lambda when calculating KG l2 loss.')
@@ -47,7 +47,7 @@ def parse_arguments():
     
     parser.add_argument('--p', type=float, default=0.3,
                         help='Leaky')
-    parser.add_argument('--drop_rate', type=float, default=0.3,
+    parser.add_argument('--drop_rate', type=float, default=0.5,
                         help='Drop rate')
     parser.add_argument('--nheads', type=int, default=4,
                         help='Num of heads')
