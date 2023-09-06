@@ -38,7 +38,7 @@ def parse_arguments():
                         help='hyper_dim')
     parser.add_argument('--lr_decay', type=float, default=0.7,
                         help='lr_decay')
-    parser.add_argument('--weight_decay', type=float, default=5e-7,
+    parser.add_argument('--weight_decay', type=float, default=5e-6,
                         help='weight_decay')
     parser.add_argument('--reg', type=float, default=0.1,
                         help='Lambda when calculating KG l2 loss.')

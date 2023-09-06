@@ -11,12 +11,11 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 import random 
 from torch_geometric.nn import HypergraphConv
+from model.layers.SpGraphAtt import SpGraphAttentionLayer
 
 from util.loss_torch import bpr_loss, EmbLoss, contrastLoss
 from util.init import *
-from base.torch_interface import TorchGraphInterface
 import torch.nn.init as init 
-from data.augmentor import GraphAugmentor
 from base.main_recommender import GraphRecommender
 from util.evaluation import early_stopping
 from util.sampler import next_batch_unified
@@ -450,6 +449,12 @@ class RelationalAwareHGCNConv(nn.Module):
         self.residuals = torch.nn.ModuleList()
         self.hyperedge_fc = torch.nn.ModuleList()
 
+        self.rel_attention = SpGraphAttentionLayer(num_nodes, nfeat,
+                                                 nhid,
+                                                 relation_dim,
+                                                 dropout=dropout,
+                                                 alpha=alpha,
+                                                 concat=True)
 
         for i in range(n_layers):
             first_channels = input_dim if i == 0 else hidden_dim
@@ -460,8 +465,9 @@ class RelationalAwareHGCNConv(nn.Module):
             self.residuals.append(nn.Linear(input_dim, second_channels).cuda())
             self.hyperedge_fc.append(nn.Linear(input_dim, first_channels).cuda())
 
-    def forward(self, inp, adj, hyperedge_attr=None):
+    def forward(self, inp, adj):
         embs = inp
+
         for i, conv in enumerate(self.convs):
             residual = self.residuals[i](inp)
             if i != self.n_layers - 1:

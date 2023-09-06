@@ -38,9 +38,9 @@ class Knowledge(Interaction, Graph):
         self.create_adjacency_dict()
         self.create_laplacian_dict()
         
-        self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
-        self.norm_kg_adj = self.normalize_graph_mat(self.kg_interaction_mat)
-        
+        self.edge_index_kg, self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
+        # self.norm_kg_adj = self.normalize_graph_mat(self.kg_interaction_mat)
+
     def construct_data(self):
         kg_data = self.kg_data
         n_relations = max(kg_data['r']) + 1
@@ -142,8 +142,10 @@ class Knowledge(Interaction, Graph):
             row += [head]
             col += [tail]
             entries += [1.0]
+            
+        edge_index_kg = torch.LongTensor([row, col])
         interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_users_entities, self.n_users_entities),dtype=np.float32)
-        return interaction_mat
+        return edge_index_kg, interaction_mat
     
     def __create_sparse_interaction_matrix(self):
         row, col, entries = [], [], []
@@ -233,7 +235,7 @@ class KnowledgeNew(Interaction):
         self.create_adjacency_dict()
         self.create_laplacian_dict()
         
-        self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
+        self.edge_index_kg, self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
         self.interaction_mat = self.__create_sparse_interaction_matrix()
         
         

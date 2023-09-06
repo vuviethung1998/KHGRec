@@ -176,7 +176,7 @@ class SelfAwareHGCNConv(nn.Module):
         for i in range(n_layers):
             first_channels = input_dim if i == 0 else hidden_dim
             second_channels = hyper_dim if i == n_layers - 1 else hidden_dim
-            self.convs.append(HypergraphConv(first_channels, second_channels, use_attention=True, heads=nheads, attention_mode=att_mode,\
+            self.convs.append(HypergraphConv(first_channels, second_channels, use_attention=False, heads=nheads, attention_mode=att_mode,\
                                             concat=False, negative_slope=leaky, dropout=dropout, bias=bias))
             self.lns.append(torch.nn.LayerNorm(second_channels))
             self.residuals.append(nn.Linear(input_dim, second_channels).cuda())
@@ -186,18 +186,18 @@ class SelfAwareHGCNConv(nn.Module):
         embs = inp
         for i, conv in enumerate(self.convs):
             residual = self.residuals[i](inp)
-            if i == 0:
-                hyperedge_attr_ = hyperedge_attr
-            else:
-                hyperedge_attr_ = self.relu(self.hyperedge_fc[i](hyperedge_attr))
-            if i != self.n_layers - 1:
-                embs = self.act(conv(embs, adj, hyperedge_attr=hyperedge_attr_)) + residual
-            else:
-                embs = conv(embs, adj, hyperedge_attr=hyperedge_attr_) + residual
-            # if i != self.n_layers - 1:
-            #     embs = self.act(self.lns[i](conv(embs, adj))) + residual
+            # if i == 0:
+            #     hyperedge_attr_ = hyperedge_attr
             # else:
-            #     embs = self.lns[i](conv(embs, adj)) + residual
+            #     hyperedge_attr_ = self.relu(self.hyperedge_fc[i](hyperedge_attr))
+            # if i != self.n_layers - 1:
+            #     embs = self.act(conv(embs, adj, hyperedge_attr=hyperedge_attr_)) + residual
+            # else:
+            #     embs = conv(embs, adj, hyperedge_attr=hyperedge_attr_) + residual
+            if i != self.n_layers - 1:
+                embs = self.act(self.lns[i](conv(embs, adj))) + residual
+            else:
+                embs = self.lns[i](conv(embs, adj)) + residual
         return embs 
 
 class SpAdjDropEdge(nn.Module):
