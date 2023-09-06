@@ -12,8 +12,8 @@ from base.torch_interface import TorchGraphInterface
 from util.loss_torch import bpr_loss,l2_reg_loss
 from util.evaluation import early_stopping
 from data.augmentor import drop_edges
-# from model.layers.HypergraphConv import HypergraphConv
-from torch_geometric.nn import HypergraphConv
+from model.layers.HypergraphConv import HypergraphConv
+# from torch_geometric.nn import HypergraphConv
 
 class HGCN(GraphRecommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
@@ -139,8 +139,8 @@ class HGCN_Encoder(nn.Module):
         if self.use_drop_edge:
             self.edge_index = drop_edges(self.edge_index, aug_ratio=self.drop_rate)
         ego_embeddings = torch.cat([self.user_emb, self.item_emb], 0)
-        hyperLat1 = self.hgnn_layer_u(ego_embeddings, self.edge_index)
-        hyperLat2 = self.hgnn_layer_i(ego_embeddings, self.edge_index_t)
+        hyperLat1 = self.hgnn_layer_u(ego_embeddings, self.edge_index, ego_embeddings)
+        hyperLat2 = self.hgnn_layer_i(ego_embeddings, self.edge_index_t, ego_embeddings)
         hyperULat = hyperLat1[:self.data.n_users]
         hyperILat = hyperLat2[self.data.n_users:]
         return hyperULat, hyperILat
@@ -176,7 +176,7 @@ class SelfAwareHGCNConv(nn.Module):
         for i in range(n_layers):
             first_channels = input_dim if i == 0 else hidden_dim
             second_channels = hyper_dim if i == n_layers - 1 else hidden_dim
-            self.convs.append(HypergraphConv(first_channels, second_channels, use_attention=True, heads=nheads,\
+            self.convs.append(HypergraphConv(first_channels, second_channels, use_attention=True, attention_mode=att_mode, heads=nheads,\
                                             concat=False, negative_slope=leaky, dropout=dropout, bias=bias))
             self.lns.append(torch.nn.LayerNorm(second_channels))
             self.residuals.append(nn.Linear(input_dim, second_channels).cuda())
@@ -186,18 +186,18 @@ class SelfAwareHGCNConv(nn.Module):
         embs = inp
         for i, conv in enumerate(self.convs):
             residual = self.residuals[i](inp)
-            # if i == 0:
-            #     hyperedge_attr_ = hyperedge_attr
-            # else:
-            #     hyperedge_attr_ = self.relu(self.hyperedge_fc[i](hyperedge_attr))
-            # if i != self.n_layers - 1:
-            #     embs = self.act(conv(embs, adj, hyperedge_attr=hyperedge_attr_)) + residual
-            # else:
-            #     embs = conv(embs, adj, hyperedge_attr=hyperedge_attr_) + residual
-            if i != self.n_layers - 1:
-                embs = self.act(self.lns[i](conv(embs, adj))) + residual
+            if i == 0:
+                hyperedge_attr_ = hyperedge_attr
             else:
-                embs = self.lns[i](conv(embs, adj)) + residual
+                hyperedge_attr_ = self.hyperedge_fc[i](hyperedge_attr)
+            if i != self.n_layers - 1:
+                embs = self.act(conv(embs, adj, hyperedge_attr=hyperedge_attr_)) + residual
+            else:
+                embs = conv(embs, adj, hyperedge_attr=hyperedge_attr_) + residual
+            # if i != self.n_layers - 1:
+            #     embs = self.act(self.lns[i](conv(embs, adj))) + residual
+            # else:
+            #     embs = self.lns[i](conv(embs, adj)) + residual
         return embs 
 
 class SpAdjDropEdge(nn.Module):
