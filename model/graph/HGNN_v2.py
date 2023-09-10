@@ -14,7 +14,9 @@ from torch_geometric.nn import HypergraphConv
 
 from util.loss_torch import bpr_loss, EmbLoss, contrastLoss
 from util.init import *
+from base.torch_interface import TorchGraphInterface
 import torch.nn.init as init 
+from data.augmentor import GraphAugmentor
 from base.main_recommender import GraphRecommender
 from util.evaluation import early_stopping
 from util.sampler import next_batch_unified
@@ -53,6 +55,8 @@ class HGNN(GraphRecommender):
         self.p = float(kwargs['p'])
         self.layers = int(kwargs['n_layers'])
         self.cl_rate = float(kwargs['cl_rate'])
+        # self.use_contrastive = kwargs['use_contrastive']
+        # self.use_attention = kwargs['use_attention']
         self.temp = kwargs['temp']
         self.seed = kwargs['seed']
         self.mode = kwargs['mode']
@@ -104,7 +108,6 @@ class HGNN(GraphRecommender):
 
             n_cf_batch = int(self.data.n_cf_train // self.batchSize + 1)
             n_kg_batch = int(self.data_kg.n_kg_train // self.batchSizeKG + 1)
-            relations = list(self.data_kg.laplacian_dict.keys())
 
             train_model.train()
             for n, batch in enumerate(next_batch_unified(self.data, self.data_kg, self.batchSize, self.batchSizeKG, device=self.device)):
@@ -112,7 +115,6 @@ class HGNN(GraphRecommender):
                 user_emb_cf, item_emb_cf = train_model(mode='cf', keep_rate=0.5)
 
                 ego_embed = train_model(mode='kg')
-                ego_embed = train_model.update_attention(ego_embed, kg_batch_head, kg_batch_pos_tail, kg_batch_relation)
                 user_emb_kg, item_emb_kg = ego_embed[train_model.user_indices], ego_embed[train_model.item_indices]
                 
                 kg_batch_head_emb = ego_embed[kg_batch_head]
@@ -125,7 +127,6 @@ class HGNN(GraphRecommender):
                 else:
                     user_emb_fused = torch.mean(torch.stack([user_emb_cf, user_emb_kg], dim=1), dim=1)
                     item_emb_fused = torch.mean(torch.stack([item_emb_cf, item_emb_kg], dim=1), dim=1)
-                    
                 h_cf = torch.cat([user_emb_cf, item_emb_cf], dim=0)
                 h_kg = torch.cat([user_emb_kg, item_emb_kg], dim=0)
                 
@@ -135,7 +136,6 @@ class HGNN(GraphRecommender):
 
                 cf_batch_loss = train_model.calculate_cf_loss(anchor_emb, pos_emb, neg_emb, self.reg)
                 kg_batch_loss = train_model.calculate_kg_loss(kg_batch_head_emb, kg_batch_relation, kg_batch_pos_tail_emb, kg_batch_neg_tail_emb, self.reg_kg)
-                
                 cf_total_loss += cf_batch_loss.item()
                 kg_total_loss +=  kg_batch_loss.item()
                 
@@ -163,7 +163,13 @@ class HGNN(GraphRecommender):
                     else:                                        
                         print('CF Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch,  cf_batch_loss.item(), cf_total_loss / (n+1)))
                         print('KG Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch, kg_batch_loss.item(), kg_total_loss / (n+1)))
-
+                        
+                # h_list  = self.data_kg.h_list.to(self.device)
+                # t_list  = self.data_kg.t_list.to(self.device)
+                # r_list = self.data_kg.r_list.to(self.device)
+                # relations = list(self.data_kg.laplacian_dict.keys())
+                # train_model.update_attention(ego_embed, h_list, t_list, r_list, relations)
+            
             cf_loss = np.mean(cf_losses)
             kg_loss = np.mean(kg_losses)
 
@@ -250,9 +256,9 @@ class HGNNModel(nn.Module):
         self.hgnn_cf = []
         self.hgnn_kg  = []
         
-        self.hgnn_layer_u = HGCNConv(leaky=self.p, dropout=self.drop_rate, n_layers=self.layers, nheads=self.nheads, input_dim=self.emb_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
-        self.hgnn_layer_i = HGCNConv(leaky=self.p, dropout=self.drop_rate, n_layers=self.layers, nheads=self.nheads, input_dim=self.emb_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
-        self.hgnn_layer_kg = HGCNConv(leaky=self.p, dropout=self.drop_rate, n_layers=self.layers, nheads=self.nheads, input_dim=self.emb_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
+        self.hgnn_layer_u = SelfAwareHGCNConv(leaky=self.p, dropout=self.drop_rate, n_layers=self.layers, nheads=self.nheads, input_dim=self.emb_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
+        self.hgnn_layer_i = SelfAwareHGCNConv(leaky=self.p, dropout=self.drop_rate, n_layers=self.layers, nheads=self.nheads, input_dim=self.emb_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
+        self.hgnn_layer_kg = RelationalAwareHGCNConv(leaky=self.p, dropout=self.drop_rate, n_layers=self.layers, nheads=self.nheads, input_dim=self.emb_size, hidden_dim=64, hyper_dim=self.hyper_size, bias=True).cuda()
         
         self.relation_emb = nn.Parameter(init.xavier_uniform_(torch.empty(self.data_kg.n_relations, self.input_dim))).to(self.device)
         self.trans_M = nn.Parameter(init.xavier_uniform_(torch.empty(self.data_kg.n_relations, self.hyper_dim, self.relation_dim))).to(self.device)
@@ -306,38 +312,34 @@ class HGNNModel(nn.Module):
         W_r = self.trans_M[r_idx]
         h_embed = ego_embed[h_list]
         t_embed = ego_embed[t_list]
-        
         # Equation (4)
-        r_mul_h = torch.matmul(h_embed, W_r) # Wreh
-        r_mul_t = torch.matmul(t_embed, W_r) # Wret
-        
-        e_input = torch.sum(r_mul_t * torch.tanh(r_mul_h + r_embed), dim=1)
-        e = self.act(e_input)
-        
+        r_mul_h = torch.matmul(h_embed, W_r)
+        r_mul_t = torch.matmul(t_embed, W_r)
         v_list = torch.sum(r_mul_t * torch.tanh(r_mul_h + r_embed), dim=1)
         return v_list
     
-    def update_attention(self, ego_embed, h_list, t_list, r_list):
-        head_emb = ego_embed[h_list]
-        tail_emb = ego_embed[t_list]
-        rel_emb = self.relation_emb[r_list]
+    def update_attention(self, ego_embed, h_list, t_list, r_list, relations):
+        rows, cols, values = [], [], []
+
+        for r_idx in relations:
+            index_list = torch.where(r_list == r_idx)
+            batch_h_list = h_list[index_list]
+            batch_t_list = t_list[index_list]
+            batch_v_list = self.update_attention_batch(ego_embed, batch_h_list, batch_t_list, r_idx)
+            rows.append(batch_h_list)
+            cols.append(batch_t_list)
+            values.append(batch_v_list)
         
-        Wh = head_emb.unsqueeze(1).expand(tail_emb.size())
-        # N, e_num, dim
-        We = tail_emb
-        a_input = torch.cat((Wh,We),dim=-1) # (i_num, e_num, 2*dim)
-        # N,e,2dim -> N,e,dim
-        e_input = torch.multiply(self.fc(a_input), rel_emb).sum(-1) # i_num,e_num
-        e = self.leakyrelu(e_input) # (i_num, e_num)
-        import pdb; pdb.set_trace()
-        
-        # zero_vec = -9e15*torch.ones_like(e)
-        # attention = torch.where(adj > 0, e, zero_vec)
-        # attention = F.softmax(attention, dim=1)
-        # attention = F.dropout(attention, self.dropout, training=self.training) # i_num, e_num
-        # # (N, 1, e_num) * (N, e_num, out_features) -> i_num, out_features
-        # entity_emb_weighted = torch.bmm(attention.unsqueeze(1), entity_embs).squeeze()
-        # h_prime = entity_emb_weighted+item_embs
+        rows = torch.cat(rows)
+        cols = torch.cat(cols)
+        values = torch.cat(values)
+
+        indices = torch.stack([rows, cols])
+        shape = self.kg_adj.shape
+        A_in = torch.sparse.FloatTensor(indices, values, torch.Size(shape))
+        # Equation (5)
+        A_in = torch.sparse.softmax(A_in.cpu(), dim=1)
+        self.kg_adj.data = A_in.to(self.device)
 
     def forward(self, mode='cf', keep_rate=1):
         if mode == 'cf':
@@ -384,9 +386,9 @@ class HGNNModel(nn.Module):
                     contrastLoss(embeds2[data.n_users:], embeds2[data.n_users:], torch.unique(poss), temp)
         return sslLoss
 
-class HGCNConv(nn.Module):
+class SelfAwareHGCNConv(nn.Module):
     def __init__(self, leaky, dropout, n_layers, nheads, input_dim, hidden_dim, hyper_dim, att_mode='node', bias=True):
-        super(HGCNConv, self).__init__()
+        super(SelfAwareHGCNConv, self).__init__()
 
         self.input_dim = input_dim
         self.hyper_dim = hyper_dim        
@@ -401,6 +403,53 @@ class HGCNConv(nn.Module):
         self.lns = torch.nn.ModuleList()
         self.residuals = torch.nn.ModuleList()
         self.hyperedge_fc = torch.nn.ModuleList()
+
+        for i in range(n_layers):
+            first_channels = input_dim if i == 0 else hidden_dim
+            second_channels = hyper_dim if i == n_layers - 1 else hidden_dim
+            self.convs.append(HypergraphConv(first_channels, second_channels, use_attention=False, heads=nheads, attention_mode=att_mode,\
+                                            concat=False, negative_slope=leaky, dropout=dropout, bias=bias))
+            self.lns.append(torch.nn.LayerNorm(second_channels))
+            self.residuals.append(nn.Linear(input_dim, second_channels).cuda())
+            self.hyperedge_fc.append(nn.Linear(input_dim, first_channels).cuda())
+
+    def forward(self, inp, adj, hyperedge_attr=None):
+        embs = inp
+        for i, conv in enumerate(self.convs):
+            residual = self.residuals[i](inp)
+            # if i == 0:
+            #     hyperedge_attr_ = hyperedge_attr
+            # else:
+            #     hyperedge_attr_ = self.relu(self.hyperedge_fc[i](hyperedge_attr))
+            # if i != self.n_layers - 1:
+            #     embs = self.act(conv(embs, adj, hyperedge_attr=hyperedge_attr_)) + residual
+            # else:
+            #     embs = conv(embs, adj, hyperedge_attr=hyperedge_attr_) + residual
+            if i != self.n_layers - 1:
+                embs = self.act(self.lns[i](conv(embs, adj))) + residual
+            else:
+                embs = self.lns[i](conv(embs, adj)) + residual
+        return embs 
+
+
+class RelationalAwareHGCNConv(nn.Module):
+    def __init__(self, leaky, dropout, n_layers, nheads, input_dim, hidden_dim, hyper_dim, att_mode='node', bias=True):
+        super(RelationalAwareHGCNConv, self).__init__()
+
+        self.input_dim = input_dim
+        self.hyper_dim = hyper_dim        
+        self.act = nn.LeakyReLU(negative_slope=leaky)
+
+        self.relu = nn.ReLU()
+        self.leaky = leaky 
+        self.dropout = dropout 
+        self.n_layers = n_layers
+        self.res_fc = nn.Linear(input_dim, hyper_dim).cuda()
+        self.convs = torch.nn.ModuleList()
+        self.lns = torch.nn.ModuleList()
+        self.residuals = torch.nn.ModuleList()
+        self.hyperedge_fc = torch.nn.ModuleList()
+
 
         for i in range(n_layers):
             first_channels = input_dim if i == 0 else hidden_dim

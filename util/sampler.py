@@ -85,6 +85,7 @@ def next_batch_unified(data, data_kg, batch_size, batch_size_kg, n_negs=1, devic
 
         h_idx  = torch.LongTensor(h_idx).to(device)
         r_idx  = torch.LongTensor(r_idx).to(device)
+        pos_t_idx = torch.LongTensor(pos_t_idx).to(device)
         neg_t_idx  = torch.LongTensor(neg_t_idx).to(device)
         yield u_idx, i_idx, j_idx, h_idx, r_idx, pos_t_idx, neg_t_idx
         

@@ -99,13 +99,21 @@ class Interaction(Data,Graph):
             row += [self.user[pair[0]]]
             col += [self.item[pair[1]]]
             entries += [1.0]
+        
+        # if HypergraphConv
+        # col = [it + self.n_users for it in col]
+        # edge_index = torch.LongTensor([row, col])
+        # edge_index_t = torch.LongTensor([col, row])
 
-        col = [it + self.n_users for it in col]
+        # interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_users,self.n_users + self.n_items),dtype=np.float32)
+        # inv_interaction_mat = sp.csr_matrix((entries, (col, row)), shape=(self.n_users + self.n_items, self.n_users), dtype=np.float32)
+
         edge_index = torch.LongTensor([row, col])
         edge_index_t = torch.LongTensor([col, row])
 
-        interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_users,self.n_users + self.n_items),dtype=np.float32)
-        inv_interaction_mat = sp.csr_matrix((entries, (col, row)), shape=(self.n_users + self.n_items, self.n_users), dtype=np.float32)
+        interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_users,self.n_items),dtype=np.float32)
+        inv_interaction_mat = sp.csr_matrix((entries, (col, row)), shape=( self.n_items, self.n_users), dtype=np.float32)
+
         return edge_index, edge_index_t, interaction_mat, inv_interaction_mat
             
     def get_user_id(self, u):

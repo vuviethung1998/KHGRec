@@ -23,6 +23,25 @@ class Graph(object):
             d_mat_inv = sp.diags(d_inv)
             norm_adj_mat = d_mat_inv.dot(adj_mat)
         return norm_adj_mat
+    
+    @staticmethod
+    def normalize_graph_mat_hyper(adj_mat):
+        shape = adj_mat.get_shape()
+        
+        colsum = np.array(adj_mat.sum(0))
+        rowsum = np.array(adj_mat.sum(1))
+
+        d_e_inv = np.power(colsum, -1).flatten()
+        d_e_inv[np.isinf(d_e_inv)] = 0.
+        d_e_mat_inv = sp.diags(d_e_inv)
+
+        d_v_inv = np.power(rowsum, -0.5).flatten()
+        d_v_inv[np.isinf(d_v_inv)] = 0.
+        d_v_mat_inv = sp.diags(d_v_inv)
+        norm_adj_mat = d_v_mat_inv.dot(adj_mat).dot(d_e_mat_inv).dot((adj_mat.T)).dot(d_v_mat_inv)
+        return norm_adj_mat
+
+        
 
     @staticmethod
     def torch_normalize_graph_mat(adj_mat):

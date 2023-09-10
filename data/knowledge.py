@@ -38,11 +38,11 @@ class Knowledge(Interaction, Graph):
         self.create_adjacency_dict()
         self.create_laplacian_dict()
         
-        self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
-        self.norm_kg_adj = self.normalize_graph_mat(self.kg_interaction_mat)
-        
+        self.edge_index_kg, self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
+        # self.norm_kg_adj = self.normalize_graph_mat(self.kg_interaction_mat)
+
     def construct_data(self):
-        kg_data = self.kg_data
+        kg_data = self.kg_data.head(10000)
         n_relations = max(kg_data['r']) + 1
         inverse_kg_data = kg_data.copy()
         inverse_kg_data = inverse_kg_data.rename({'h': 't', 't': 'h'}, axis='columns')
@@ -55,7 +55,6 @@ class Knowledge(Interaction, Graph):
         
         kg_train_data = pd.concat([kg_data, inverse_kg_data], axis=0, ignore_index=True, sort=False)
         self.n_entities = max(max(kg_train_data['h']), max(kg_train_data['t'])) + 1
-        self.n_relations = max(kg_train_data['r']) + 1
 
         # add interactions to kg data
         cf2kg_train_data = pd.DataFrame(np.zeros((self.n_cf_train, 3), dtype=np.int32), columns=['h', 'r', 't'])
@@ -70,6 +69,7 @@ class Knowledge(Interaction, Graph):
         self.n_kg_train = len(self.kg_train_data)
 
         self.n_users_entities = int(max(max(self.kg_train_data['h']), max(self.kg_train_data['t'])) + 1)
+        self.n_relations = max(self.kg_train_data['r']) + 1
 
         # construct kg dict
         h_list = []
@@ -142,8 +142,10 @@ class Knowledge(Interaction, Graph):
             row += [head]
             col += [tail]
             entries += [1.0]
+            
+        edge_index_kg = torch.LongTensor([row, col])
         interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_users_entities, self.n_users_entities),dtype=np.float32)
-        return interaction_mat
+        return edge_index_kg, interaction_mat
     
     def __create_sparse_interaction_matrix(self):
         row, col, entries = [], [], []
@@ -228,12 +230,12 @@ class KnowledgeNew(Interaction):
         self.training_set_e = defaultdict(dict)
 
         self.construct_data()
-        
+    
         self.laplacian_type = 'random-walk'
         self.create_adjacency_dict()
         self.create_laplacian_dict()
         
-        self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
+        self.edge_index_kg, self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
         self.interaction_mat = self.__create_sparse_interaction_matrix()
         
         
