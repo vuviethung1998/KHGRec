@@ -11,6 +11,13 @@ class TorchGraphInterface(object):
         v = torch.from_numpy(coo.data).float()
         return torch.sparse.FloatTensor(i, v, coo.shape)
 
+    @staticmethod
+    def sparse_identity(n):
+        indices = torch.arange(n)
+        values = torch.ones(n)
+        i = torch.stack((indices, indices))
+        return torch.sparse_coo_tensor(i, values, size=(n, n))
+    
 def sparse_pow(tensor, exponent):
     """
     Raise the values of a sparse tensor to the specified power element-wise.
@@ -55,3 +62,9 @@ def cat_sparse_tensors(sparse_tensor1, sparse_tensor2, dim):
     # Create a new sparse tensor with concatenated indices and values
     concatenated_sparse_tensor = torch.sparse.FloatTensor(new_indices, new_values, new_shape)
     return concatenated_sparse_tensor
+
+def sparse_identity(n):
+    indices = torch.arange(n)
+    values = torch.ones(n)
+    i = torch.stack((indices, indices))
+    return torch.sparse_coo_tensor(i, values, size=(n, n))

@@ -20,7 +20,7 @@ def parse_arguments():
                         help='KG loss pct')
     parser.add_argument('--lrate', type=float, default=0.001,
                         help='Lrate')
-    parser.add_argument('--max_epoch', type=int, default=500,
+    parser.add_argument('--max_epoch', type=int, default=1000,
                         help='Max Epoch')
     parser.add_argument('--batch_size', type=int, default=2048,
                         help='Batch size')
@@ -38,7 +38,7 @@ def parse_arguments():
                         help='hyper_dim')
     parser.add_argument('--lr_decay', type=float, default=0.7,
                         help='lr_decay')
-    parser.add_argument('--weight_decay', type=float, default=5e-7,
+    parser.add_argument('--weight_decay', type=float, default=5e-5,
                         help='weight_decay')
     parser.add_argument('--reg', type=float, default=0.1,
                         help='Lambda when calculating KG l2 loss.')

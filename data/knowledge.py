@@ -39,10 +39,10 @@ class Knowledge(Interaction, Graph):
         self.create_laplacian_dict()
         
         self.edge_index_kg, self.kg_interaction_mat = self.__create_sparse_knowledge_interaction_matrix()
-        # self.norm_kg_adj = self.normalize_graph_mat(self.kg_interaction_mat)
+        self.norm_kg_adj = self.normalize_graph_mat(self.kg_interaction_mat)
 
     def construct_data(self):
-        kg_data = self.kg_data.head(10000)
+        kg_data = self.kg_data
         n_relations = max(kg_data['r']) + 1
         inverse_kg_data = kg_data.copy()
         inverse_kg_data = inverse_kg_data.rename({'h': 't', 't': 'h'}, axis='columns')
@@ -146,16 +146,6 @@ class Knowledge(Interaction, Graph):
         edge_index_kg = torch.LongTensor([row, col])
         interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_users_entities, self.n_users_entities),dtype=np.float32)
         return edge_index_kg, interaction_mat
-    
-    def __create_sparse_interaction_matrix(self):
-        row, col, entries = [], [], []
-        for pair in self.training_data:
-            head, tail  = int(pair[0]), int(pair[1])
-            row += [head]
-            col += [tail]
-            entries += [1.0]
-        interaction_mat = sp.csr_matrix((entries, (row, col)), shape=(self.n_users_entities, self.n_users_entities),dtype=np.float32) 
-        return interaction_mat
     
     def convert_coo2tensor(self, coo):
         values = coo.data

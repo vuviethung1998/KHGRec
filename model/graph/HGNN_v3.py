@@ -39,6 +39,7 @@ class HGNN(GraphRecommender):
 
     def _parse_config(self, kwargs):
         self.dataset = kwargs['dataset']
+        
         self.lRate = float(kwargs['lrate'])
         self.lr_decay = float(kwargs['lr_decay'])
         self.maxEpoch = int(kwargs['max_epoch'])
@@ -109,11 +110,6 @@ class HGNN(GraphRecommender):
                 # train KG
                 ego_embed = train_model(mode='kg', keep_rate=1)
                 user_emb_kg, item_emb_kg = ego_embed[train_model.user_indices], ego_embed[train_model.item_indices]
-                # h_list  = self.data_kg.h_list.to(self.device)
-                # t_list  = self.data_kg.t_list.to(self.device)
-                # r_list = self.data_kg.r_list.to(self.device)
-                relations = list(self.data_kg.laplacian_dict.keys())
-                train_model.update_attention(ego_embed, kg_batch_head, kg_batch_pos_tail, kg_batch_relation, relations)
                 
                 kg_batch_head_emb = ego_embed[kg_batch_head]
                 kg_batch_pos_tail_emb = ego_embed[kg_batch_pos_tail]
@@ -230,8 +226,7 @@ class HGNNModel(nn.Module):
         self.use_drop_edge = False
         self.sparse_norm_adj  = TorchGraphInterface.convert_sparse_mat_to_tensor(data.norm_adj).to(self.device)
         self.kg_adj = TorchGraphInterface.convert_sparse_mat_to_tensor(data_kg.norm_kg_adj).to(self.device)
-        kg_shape = self.kg_adj.shape
-        self.att_adj = TorchGraphInterface.sparse_identity(kg_shape[0]).to(self.device)
+        
         self.device = device 
 
         self.user_indices =  torch.LongTensor(list(data.user.keys())).to(self.device)
@@ -283,7 +278,7 @@ class HGNNModel(nn.Module):
     def calculate_kg_embeddings(self, keep_rate: float=1):
         embeds = self.embedding_dict['user_entity_emb']
         sparse_norm_kg_adj = self.edgeDropper(self.kg_adj, keep_rate)
-        hyperLat = self.hgnn_layer_kg(embeds, sparse_norm_kg_adj, att_adj=self.att_adj)
+        hyperLat = self.hgnn_layer_kg(embeds, sparse_norm_kg_adj)
         return hyperLat 
 
     def update_attention_batch(self, ego_embed, h_list, t_list, r_idx):
@@ -291,35 +286,37 @@ class HGNNModel(nn.Module):
         W_r = self.trans_M[r_idx]
         h_embed = ego_embed[h_list]
         t_embed = ego_embed[t_list]
+        
         # Equation (4)
-        r_mul_h = torch.matmul(h_embed, W_r)
-        r_mul_t = torch.matmul(t_embed, W_r)
+        r_mul_h = torch.matmul(h_embed, W_r) # Wreh
+        r_mul_t = torch.matmul(t_embed, W_r) # Wret
+        
+        e_input = torch.sum(r_mul_t * torch.tanh(r_mul_h + r_embed), dim=1)
+        e = self.act(e_input)
+        
         v_list = torch.sum(r_mul_t * torch.tanh(r_mul_h + r_embed), dim=1)
         return v_list
     
-    def update_attention(self, ego_embed, h_list, t_list, r_list, relations):
-        rows, cols, values = [], [], []
-
-        for r_idx in relations:
-            index_list = torch.where(r_list == r_idx)
-            batch_h_list = h_list[index_list]
-            batch_t_list = t_list[index_list]
-
-            batch_v_list = self.update_attention_batch(ego_embed, batch_h_list, batch_t_list, r_idx)
-            rows.append(batch_h_list)
-            cols.append(batch_t_list)
-            values.append(batch_v_list)
-
-        rows = torch.cat(rows)
-        cols = torch.cat(cols)
-        values = torch.cat(values)
-
-        indices = torch.stack([rows, cols])
-        shape = self.kg_adj.shape
-        A_in = torch.sparse.FloatTensor(indices, values, torch.Size(shape))
-        # Equation (5)
-        A_in = torch.sparse.softmax(A_in.cpu(), dim=1)
-        self.att_adj.data = A_in.to(self.device)
+    def update_attention(self, ego_embed, h_list, t_list, r_list):
+        head_emb = ego_embed[h_list]
+        tail_emb = ego_embed[t_list]
+        rel_emb = self.relation_emb[r_list]
+        
+        Wh = head_emb.unsqueeze(1).expand(tail_emb.size())
+        # N, e_num, dim
+        We = tail_emb
+        a_input = torch.cat((Wh,We),dim=-1) # (i_num, e_num, 2*dim)
+        # N,e,2dim -> N,e,dim
+        e_input = torch.multiply(self.fc(a_input), rel_emb).sum(-1) # i_num,e_num
+        e = self.leakyrelu(e_input) # (i_num, e_num)
+        
+        # zero_vec = -9e15*torch.ones_like(e)
+        # attention = torch.where(adj > 0, e, zero_vec)
+        # attention = F.softmax(attention, dim=1)
+        # attention = F.dropout(attention, self.dropout, training=self.training) # i_num, e_num
+        # # (N, 1, e_num) * (N, e_num, out_features) -> i_num, out_features
+        # entity_emb_weighted = torch.bmm(attention.unsqueeze(1), entity_embs).squeeze()
+        # h_prime = entity_emb_weighted+item_embs
 
     def forward(self, mode='cf', keep_rate=1):
         if mode == 'cf':
@@ -413,29 +410,18 @@ class RelationalAwareEncoder(nn.Module):
         self.convs = torch.nn.ModuleList()
         self.lns = torch.nn.ModuleList()
         for i in range(n_layers):
-            self.convs.append(AttHGCNConv(leaky=leaky))
+            self.convs.append(HGCNConv(leaky=leaky))
             self.lns.append(torch.nn.LayerNorm(hyper_dim))
-            
-    def forward(self, embs, sparse_adj, att_adj):
+
+    def forward(self, embs, sparse_adj):
         residual = embs
         for i, conv in enumerate(self.convs):
             if i != self.n_layers - 1:
-                embs = self.lns[i](conv(sparse_adj, att_adj, embs)) + residual
+                embs = self.lns[i](conv(sparse_adj, embs)) + residual
             else:
-                embs = self.lns[i](conv(sparse_adj, att_adj, embs, act=False)) + residual
+                embs = self.lns[i](conv(sparse_adj, embs, act=False)) + residual
         return embs 
-    
 
-class AttHGCNConv(nn.Module):
-    def __init__(self, leaky):
-        super(AttHGCNConv, self).__init__()
-        self.act = nn.LeakyReLU(negative_slope=leaky)
-
-    def forward(self, adj, att_adj, embs, act=True):
-        if act:
-            return self.act(torch.sparse.mm(adj, torch.sparse.mm(att_adj, torch.sparse.mm(adj.t(), embs))))
-        else:
-            return torch.sparse.mm(adj, torch.sparse.mm(att_adj, torch.sparse.mm(adj.t(), embs)))
 
 class HGCNConv(nn.Module):
     def __init__(self, leaky):
