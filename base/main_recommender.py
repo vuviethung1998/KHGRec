@@ -22,7 +22,7 @@ class GraphRecommender(Recommender):
         self.data = Interaction(conf, training_set, test_set)
         self.data_kg = Knowledge(conf, training_set, test_set, knowledge_set)
         self.bestPerformance = []
-        top = self.ranking['-topN'].split(',')
+        top = self.ranking.split(',')
         self.topN = [int(num) for num in top]
         self.max_N = max(self.topN)
         
@@ -35,7 +35,7 @@ class GraphRecommender(Recommender):
         elif kwargs['mode'] == 'wo_ssl':
             model_name = "HGNN_KG"
         
-        self.output = f"./results/{model_name}/{self.dataset}/@{self.model_name}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-bs:{self.batch_size}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-cl_rate:{kwargs['cl_rate']}-temp:{kwargs['temp']}/"
+        self.output = f"./results/{model_name}/{self.dataset}/@{self.model_name}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-bs:{self.batch_size}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-weight_decay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-cl_rate:{kwargs['cl_rate']}-temp:{kwargs['temp']}/"
         if not os.path.exists(self.output):
             os.makedirs(self.output)
 

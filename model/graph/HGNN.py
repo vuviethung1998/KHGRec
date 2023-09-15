@@ -34,7 +34,7 @@ class HGNN(GraphRecommender):
         self.attention_user = Attention(in_size=self.hyper_dim, hidden_size=self.hyper_dim).to(self.device)
         self.attention_item = Attention(in_size=self.hyper_dim, hidden_size=self.hyper_dim).to(self.device)
         
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lRate, weight_decay=self.weight_decay)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lRate, weight_decay=self.weight_decay)
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay, patience=10)
 
     def _parse_config(self, kwargs):
@@ -48,6 +48,7 @@ class HGNN(GraphRecommender):
         self.reg_kg = float(kwargs['reg_kg'])
         self.hyper_dim = int(kwargs['hyper_dim'])
         self.p = float(kwargs['p'])
+        self.drop_rate = float(kwargs['drop_rate'])
         self.layers = int(kwargs['n_layers'])
         self.cl_rate = float(kwargs['cl_rate'])
         self.temp = kwargs['temp']
@@ -109,10 +110,6 @@ class HGNN(GraphRecommender):
                 # train KG
                 ego_embed = train_model(mode='kg', keep_rate=1)
                 user_emb_kg, item_emb_kg = ego_embed[train_model.user_indices], ego_embed[train_model.item_indices]
-                # h_list  = self.data_kg.h_list.to(self.device)
-                # t_list  = self.data_kg.t_list.to(self.device)
-                # r_list = self.data_kg.r_list.to(self.device)
-                relations = list(self.data_kg.laplacian_dict.keys())
                 train_model.update_attention(ego_embed, kg_batch_head, kg_batch_pos_tail, kg_batch_relation, relations)
                 
                 kg_batch_head_emb = ego_embed[kg_batch_head]
