@@ -11,7 +11,7 @@ class Recommender(object):
         self.config = conf
         self.data = Data(self.config, training_set, test_set)
         self.model_name = self.config['model.name']
-        self.ranking = OptionConf(self.config['item.ranking'])
+        self.ranking = kwargs['item_ranking']
         self.emb_size = int(self.config['embedding.size'])
         self.maxEpoch = int(self.config['num.max.epoch'])
         self.batch_size = int(self.config['batch_size'])

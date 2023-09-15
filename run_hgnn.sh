@@ -1,1 +1,0 @@
-python main.py  --model=HGCN --lrate=0.001 --weight_decay=5e-7 --reg=0.1 

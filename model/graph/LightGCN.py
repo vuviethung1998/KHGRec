@@ -8,24 +8,34 @@ from util.conf import OptionConf
 from util.sampler import next_batch_pairwise
 from base.torch_interface import TorchGraphInterface
 from util.loss_torch import bpr_loss,l2_reg_loss
-# paper: LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation. SIGIR'20
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from util.evaluation import early_stopping
 
+# paper: LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation. SIGIR'20\
 class LightGCN(GraphRecommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
         super(LightGCN, self).__init__(conf, training_set, test_set, knowledge_set, **kwargs)
         args = OptionConf(self.config['LightGCN'])
+        self.kwargs = kwargs
         self.n_layers = int(args['-n_layer'])
         self.model = LGCN_Encoder(self.data, self.emb_size, self.n_layers)
-
+        self.lr_decay  = float(kwargs['lr_decay'])
+        self.early_stopping_steps = int(kwargs['early_stopping_steps'])
+        self.reg = float(kwargs['reg'])
+        self.maxEpoch = int(kwargs['max_epoch'])
+        self.lRate = float(kwargs['lrate'])
+        self.wdecay = float(kwargs['weight_decay'])
+        
     def train(self):
         model = self.model.cuda()
-        optimizer = torch.optim.Adam(model.parameters(), lr=self.lRate)
+        optimizer = torch.optim.Adam(model.parameters(), lr=self.lRate, weight_decay=self.wdecay)
 
         lst_train_losses = []
         lst_rec_losses = []
         lst_reg_losses = []
         lst_performances = []
-
+        recall_list = []
+        
         for epoch in range(self.maxEpoch):
             train_losses = []
             rec_losses = []
@@ -60,9 +70,14 @@ class LightGCN(GraphRecommender):
 
             with torch.no_grad():
                 self.user_emb, self.item_emb = model()
-            # if epoch % 5 == 0:
-            _, data_ep = self.fast_evaluation(epoch)
-            lst_performances.append(data_ep)
+                cur_data, data_ep = self.fast_evaluation(epoch)
+                lst_performances.append(data_ep)
+                
+                cur_recall =  float(cur_data[2].split(':')[1])
+                recall_list.append(cur_recall)
+                best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
+                if should_stop:
+                    break 
         
         print(lst_train_losses)
         self.save_loss(lst_train_losses, lst_rec_losses, lst_reg_losses)

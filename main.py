@@ -12,7 +12,7 @@ def parse_arguments():
                         help='Model name')
     parser.add_argument('--gpu_id', type=int, default=0,
                         help='GPU')
-    parser.add_argument('--dataset', type=str, default='lastfm', choices=['lastfm', 'amazon_books', 'ml-1m'],
+    parser.add_argument('--dataset', type=str, default='lastfm', choices=['lastfm', 'alibaba-fashion', 'ml-1m'],
                         help='Dataset name')
     parser.add_argument('--seed', type=int, default=60,
                         help='seed')
@@ -20,10 +20,14 @@ def parse_arguments():
                         help='KG loss pct')
     parser.add_argument('--lrate', type=float, default=0.001,
                         help='Lrate')
+    parser.add_argument('--item_ranking', type=str, default='20,40')
+    
     parser.add_argument('--max_epoch', type=int, default=500,
                         help='Max Epoch')
     parser.add_argument('--batch_size', type=int, default=2048,
                         help='Batch size')
+    parser.add_argument('--hyperedge_num', type=int, default=128,
+                        help='Hyperedge num')
     parser.add_argument('--batch_size_kg', type=int, default=8192,
                         help='Batch size KG')
     parser.add_argument('--n_layers', type=int, default=2,
@@ -36,20 +40,20 @@ def parse_arguments():
                         help='relation_dim')
     parser.add_argument('--hyper_dim', type=int, default=128,
                         help='hyper_dim')
-    parser.add_argument('--lr_decay', type=float, default=0.7,
+    parser.add_argument('--lr_decay', type=float, default=0.9,
                         help='lr_decay')
     parser.add_argument('--weight_decay', type=float, default=5e-6,
                         help='weight_decay')
-    parser.add_argument('--reg', type=float, default=0.1,
+    parser.add_argument('--reg', type=float, default=0.01,
                         help='Lambda when calculating KG l2 loss.')
-    parser.add_argument('--reg_kg', type=float, default=0.1,
+    parser.add_argument('--reg_kg', type=float, default=0.01,
                         help='Lambda when calculating CF l2 loss.')
     
     parser.add_argument('--p', type=float, default=0.3,
                         help='Leaky')
-    parser.add_argument('--drop_rate', type=float, default=0.5,
+    parser.add_argument('--drop_rate', type=float, default=0.2,
                         help='Drop rate')
-    parser.add_argument('--nheads', type=int, default=4,
+    parser.add_argument('--nheads', type=int, default=1,
                         help='Num of heads')
     parser.add_argument('--temp', type=float, default=10,
                         help='Contrastive rate')
@@ -75,7 +79,7 @@ def parse_arguments():
     parser.add_argument('--mess_dropout', nargs='?', default='[0.1, 0.1, 0.1]',
                         help='Dropout probability w.r.t. message dropout for each deep layer. 0: no dropout.')
 
-    parser.add_argument('--early_stopping_steps', type=int, default=100,
+    parser.add_argument('--early_stopping_steps', type=int, default=30,
                         help='Early stop.')
     parser.add_argument('--cf_print_every', type=int, default=1,
                         help='Iter interval of printing CF loss.')
@@ -89,8 +93,8 @@ def parse_arguments():
 
 if __name__ == '__main__':
     # Register your model here
-    graph_baselines = ['LightGCN','DirectAU','MF','SASRec', 'KGAT', 'HGCN', 'KHGRec']
-    ssl_graph_models = ['SGL', 'SimGCL', 'SEPT', 'MHCN', 'BUIR', 'SelfCF', 'SSL4Rec', 'XSimGCL', 'NCL','MixGCF', 'HKGRippleNet', 'HGNN', 'HCCF']
+    graph_baselines = ['LightGCN','DirectAU','MF','SASRec', 'KGAT', 'HGCN', 'KHGRec', 'DHCF']
+    ssl_graph_models = ['SGL', 'SimGCL', 'SEPT', 'MHCN', 'BUIR', 'SelfCF', 'SSL4Rec', 'XSimGCL', 'NCL','MixGCF', 'HKGRippleNet', 'HGNN', 'HCCF', 'SHT']
     sequential_baselines= ['SASRec']
     ssl_sequential_models = ['CL4SRec']
 

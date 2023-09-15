@@ -21,13 +21,12 @@ class KGGraphRecommender(Recommender):
         super(KGGraphRecommender, self).__init__(conf, training_set, test_set, knowledge_set,**kwargs)        
         self.data = InteractionKG(conf, training_set, test_set)
         self.data_kg = Knowledge(conf, training_set, test_set, knowledge_set)
-
         self.bestPerformance = []
-        top = self.ranking['-topN'].split(',')
+        top = self.ranking.split(',')
         self.topN = [int(num) for num in top]
         self.max_N = max(self.topN)
         
-        self.output_path =  f"./results/{kwargs['model']}/{kwargs['dataset']}/@KGAT-inp_emb:{kwargs['input_dim']}-emb:{kwargs['embedding_size']}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lr_kg:{kwargs['lratekg']}-n_layers:{kwargs['n_layers']}/"
+        self.output_path =  f"./results/{kwargs['model']}/{kwargs['dataset']}/@KGAT-inp_emb:{kwargs['input_dim']}-emb:{kwargs['embedding_size']}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-n_layers:{kwargs['n_layers']}/"
         if not os.path.exists(self.output_path):
             os.makedirs(self.output_path)
             

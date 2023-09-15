@@ -29,7 +29,6 @@ class KGAT(KGGraphRecommender):
 
     def _parse_args(self, args):
         self.lRate = args['lrate']
-        self.lRateKG = args['lratekg']
         self.maxEpoch = args['max_epoch']
         self.batchSize = args['batch_size']
         self.batchSizeKG = args['batch_size_kg']
@@ -46,7 +45,7 @@ class KGAT(KGGraphRecommender):
         self.conv_dim_list = args['conv_dim_list']
         self.seed = args['seed']
         self.alpha = args['alpha']
-        self.stopping_steps =  args['stopping_steps']
+        self.stopping_steps =  args['early_stopping_steps']
 
     def train(self):
         # seed
@@ -62,7 +61,7 @@ class KGAT(KGGraphRecommender):
         recall_list = []
         
         cf_optimizer  = torch.optim.Adam(self.model.parameters(), lr=self.lRate)
-        kg_optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lRateKG)
+        kg_optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lRate)
         scheduler_cf = ReduceLROnPlateau(cf_optimizer, 'min', factor=self.lr_decay, patience=10)
         scheduler_kg = ReduceLROnPlateau(kg_optimizer, 'min', factor=self.lr_decay, patience=10)
             

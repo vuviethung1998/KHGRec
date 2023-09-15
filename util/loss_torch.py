@@ -101,13 +101,13 @@ class EmbLoss(nn.Module):
             return emb_loss
 
 def contrastLoss(embeds1, embeds2, nodes, temp):
-	embeds1 = F.normalize(embeds1 + 1e-8, p=2)
-	embeds2 = F.normalize(embeds2 + 1e-8, p=2)
-	pckEmbeds1 = embeds1[nodes]
-	pckEmbeds2 = embeds2[nodes]
-	nume = torch.exp(torch.sum(pckEmbeds1 * pckEmbeds2, dim=-1) / temp)
-	deno = torch.exp(pckEmbeds1 @ pckEmbeds2.T / temp).sum(-1) + 1e-8
-	return -torch.log(nume / deno).mean()
+    embeds1 = F.normalize(embeds1 + 1e-8, p=2)
+    embeds2 = F.normalize(embeds2 + 1e-8, p=2)
+    pckEmbeds1 = embeds1[nodes]
+    pckEmbeds2 = embeds2[nodes]
+    nume = torch.exp(torch.sum(pckEmbeds1 * pckEmbeds2, dim=-1) / temp)
+    deno = torch.exp(pckEmbeds1 @ pckEmbeds2.T / temp).sum(-1) + 1e-8
+    return -torch.log(nume / deno).mean()
 
 def L2_loss_mean(x):
     return torch.mean(torch.sum(torch.pow(x, 2), dim=1, keepdim=False) / 2.)

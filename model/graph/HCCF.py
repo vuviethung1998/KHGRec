@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os 
+import numpy as np 
 
 import time
 from base.graph_recommender import GraphRecommender
@@ -21,29 +22,34 @@ class HCCF(GraphRecommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
         GraphRecommender.__init__(self, conf, training_set, test_set, knowledge_set, **kwargs)
         self.reg_loss = EmbLoss() 
-        self.model = HCCFEncoder(self.config, self.data )
-
+        self.model = HCCFEncoder(kwargs, self.data )
         self._parse_config(self.config, kwargs)
         self.model.to(device)
-
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lRate, weight_decay=0.001)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lRate)
         self.scheduler = ReduceLROnPlateau(self.optimizer, 'min', factor=self.lr_decay, patience=5)
-
+        
     def _parse_config(self, config, kwargs):
-        self.lRate = float(config['learnRate'])
-        self.lr_decay = float(config['learnRateDecay'])
-        self.maxEpoch = int(config['num.max.epoch'])
-        self.batchSize = int(config['batch_size'])
-        self.reg = float(config['reg.lambda'])
-        self.embeddingSize = int(config['embedding.size'])
+        self.maxEpoch = int(kwargs['max_epoch'])
+        self.batchSize = int(kwargs['batch_size'])
+        
+        self.lRate = float(kwargs['lrate'])
+        self.lr_decay = float(kwargs['lr_decay'])
+        self.maxEpoch = int(kwargs['max_epoch'])
+        self.batchSize = int(kwargs['batch_size'])
+        self.reg = float(kwargs['reg'])
+        self.latent_size = int(kwargs['embedding_size'])
+        self.hyperDim = int(kwargs['hyper_dim'])
+        self.drop_rate = float(kwargs['drop_rate'])
+        self.leaky = float(kwargs['p'])
+        self.nLayers = int(kwargs['n_layers'])
+        self.ss_rate = float(kwargs['cl_rate'])
+        
         self.hyperDim = int(config['hyper.size'])
         self.dropRate = float(config['dropout'])
         self.negSlove = float(config['leaky'])
-        self.nLayers = int(config['gnn_layer'])
         self.temp = float(config['temp'])
         self.seed = int(kwargs['seed'])
-        self.early_stopping_steps = int(kwargs['stopping_steps'])
-        self.ss_rate = float(config['ss_rate'])
+        self.early_stopping_steps = int(kwargs['early_stopping_steps'])
 
     def calcLosses(self, ancs, poss, negs, gcnEmbedsLst, hyperEmbedsLst, reg):
         bprLoss = bpr_loss(ancs, poss, negs)
@@ -59,7 +65,7 @@ class HCCF(GraphRecommender):
     def train(self):
         model = self.model 
         recall_list = []
-
+        train_losses = [] 
         for ep in range(self.maxEpoch):
             for n, batch in enumerate(next_batch_pairwise(self.data, self.batchSize)):
                 user_idx, pos_idx, neg_idx = batch
@@ -73,7 +79,10 @@ class HCCF(GraphRecommender):
                 loss_rec, loss_ssl = self.calcLosses(anchor_emb, pos_emb, neg_emb, gcnEmbedsLst, hyperEmbedsLst, self.reg)
                 batch_loss = loss_rec + loss_ssl  
                 
+                train_losses.append(batch_loss.item())
+                
                 self.optimizer.zero_grad()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 4)
                 batch_loss.backward()
                 self.optimizer.step()
 
@@ -89,6 +98,9 @@ class HCCF(GraphRecommender):
                     best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
                     if should_stop:
                         break 
+                    
+            train_loss = np.mean(train_losses)
+            self.scheduler.step(train_loss)
 
             e_eval = time.time()
             print("Eval time: %f s" % (e_eval - s_eval))
@@ -97,7 +109,9 @@ class HCCF(GraphRecommender):
     def save(self):
         with torch.no_grad():
             self.best_user_emb, self.best_item_emb, _,_ = self.model(keep_rate=1)
-
+            print("Saving")
+            self.save_model(self.model)     
+            
     def predict(self, u):
         user_id  = self.data.get_user_id(u)
         score = torch.matmul(self.user_emb[user_id], self.item_emb.transpose(0, 1))
@@ -119,18 +133,18 @@ class HCCFEncoder(nn.Module):
         self.edgeDropper = SpAdjDropEdge()
 
     def _parse_config(self, config):
-        self.lRate = float(config['learnRate'])
-        self.lr_decay = float(config['learnRateDecay'])
-        self.maxEpoch = int(config['num.max.epoch'])
+        self.lRate = float(config['lrate'])
+        self.lr_decay = float(config['lr_decay'])
+        self.maxEpoch = int(config['max_epoch'])
         self.batchSize = int(config['batch_size'])
-        self.reg = float(config['reg.lambda'])
-        self.latent_size = int(config['embedding.size'])
-        self.hyperDim = int(config['hyper.size'])
-        self.drop_rate = float(config['dropout'])
-        self.leaky = float(config['leaky'])
-        self.n_layers = int(config['gnn_layer'])
-        self.n_edges = int(config['hyperedge_num'])
-
+        self.reg = float(config['reg'])
+        self.latent_size = int(config['embedding_size'])
+        self.hyperDim = int(config['hyper_dim'])
+        self.drop_rate = float(config['drop_rate'])
+        self.leaky = float(config['p'])
+        self.n_layers = int(config['n_layers'])
+        self.n_edges = int(config['hyper_dim'])
+        
     def _init_model(self):
         initializer = nn.init.xavier_uniform_
         embedding_dict = nn.ParameterDict({

@@ -1,21 +1,6 @@
 import random 
 from data.loader import FileIO
-from re import split
-import time 
 from random import shuffle
-
-def _create_interaction_dataset(dir, origin_file, out_file):
-    newlines = [] 
-    with open(dir +origin_file, 'r') as f:
-        lines = f.readlines()
-    
-    for line in lines:
-        line = line[:-1]
-        line += '\t1\n'
-        newlines.append(line)
-
-    FileIO.write_file(dir,out_file, newlines)
-    
 
 def _create_train_test_file(dir, infile):
     with open(dir + infile, 'r') as f:
@@ -41,10 +26,8 @@ def _create_kg_data(dir, infile):
     return n_entities, n_relations, kg_data
 
 if __name__ == '__main__':
-    dir = './dataset/amazon_books/'
-    original_file = 'amazon_books.inter'
-    kg_file = 'amazon_books.kg'
-    
+    dir = './dataset/alibaba-fashion/'
+    original_file = 'alibaba-fashion.inter'
     # _create_interaction_dataset(dir, original_file, out_file)
     _create_train_test_file(dir, original_file)
     # _create_kg_data(dir, out_kg_file)
