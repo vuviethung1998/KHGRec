@@ -17,19 +17,19 @@ from util.init import *
 import torch.nn.init as init 
 from base.main_recommender import GraphRecommender
 from util.evaluation import early_stopping
-from util.sampler import next_batch_unified
+from util.sampler import next_batch_unified, next_batch_pairwise
 from base.torch_interface import TorchGraphInterface
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
-class HGNN(GraphRecommender):
+class HGNNAblation(GraphRecommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
         GraphRecommender.__init__(self, conf, training_set, test_set, knowledge_set, **kwargs)
 
         self.device = torch.device(f"cuda:{kwargs['gpu_id']}" if torch.cuda.is_available() else 'cpu')
         self._parse_config( kwargs)
         self.set_seed()
-        self.model = HGNNModel(self.data, self.data_kg, kwargs, self.device).to(self.device)
+        self.model = HGNNModel(self.data, self.data_kg, kwargs, self.device, use_hyper=self.use_hyper).to(self.device)
         
         self.attention_user = Attention(in_size=self.hyper_dim, hidden_size=self.hyper_dim).to(self.device)
         self.attention_item = Attention(in_size=self.hyper_dim, hidden_size=self.hyper_dim).to(self.device)
@@ -56,17 +56,27 @@ class HGNN(GraphRecommender):
         self.mode = kwargs['mode']
         self.early_stopping_steps = kwargs['early_stopping_steps']
         self.weight_decay = kwargs['weight_decay']
-
+        
+        self.use_hyper = True
+        self.use_global = True         
         if self.mode == 'full':
             self.use_contrastive = True
             self.use_attention = True
-        elif self.mode == 'wo_attention':
+        elif self.mode == 'woatt':
             self.use_contrastive = True
             self.use_attention = False
-        elif self.mode == 'wo_ssl':
+        elif self.mode == 'wossl':
             self.use_contrastive = False
+            self.use_attention = True
+        elif self.mode == 'wohyper':
+            self.use_hyper = False
             self.use_attention = True 
-            
+            self.use_contrastive = True
+        elif self.mode == 'woglobal':
+            self.use_global = False
+            self.use_attention = False 
+            self.use_contrastive = False  
+             
     def set_seed(self):
         seed = self.seed 
         np.random.seed(seed)
@@ -105,104 +115,152 @@ class HGNN(GraphRecommender):
             relations = list(self.data_kg.laplacian_dict.keys())
 
             train_model.train()
-            for n, batch in enumerate(next_batch_unified(self.data, self.data_kg, self.batchSize, self.batchSizeKG, device=self.device)):
-                user_idx, pos_idx, neg_idx, kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail = batch
-                # train KG
-                ego_embed = train_model(mode='kg', keep_rate=1-self.drop_rate)
-                user_emb_kg, item_emb_kg = ego_embed[train_model.user_indices], ego_embed[train_model.item_indices]
-                train_model.update_attention(ego_embed, kg_batch_head, kg_batch_pos_tail, kg_batch_relation, relations)
+            if self.use_global:
+                for n, batch in enumerate(next_batch_unified(self.data, self.data_kg, self.batchSize, self.batchSizeKG, device=self.device)):
+                    user_idx, pos_idx, neg_idx, kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail = batch
+
+                    ego_embed = train_model(mode='kg', keep_rate=1-self.drop_rate)
+                    user_emb_kg, item_emb_kg = ego_embed[train_model.user_indices], ego_embed[train_model.item_indices]
+                    train_model.update_attention(ego_embed, kg_batch_head, kg_batch_pos_tail, kg_batch_relation, relations)
                 
-                kg_batch_head_emb = ego_embed[kg_batch_head]
-                kg_batch_pos_tail_emb = ego_embed[kg_batch_pos_tail]
-                kg_batch_neg_tail_emb = ego_embed[kg_batch_neg_tail]
+                    kg_batch_head_emb = ego_embed[kg_batch_head]
+                    kg_batch_pos_tail_emb = ego_embed[kg_batch_pos_tail]
+                    kg_batch_neg_tail_emb = ego_embed[kg_batch_neg_tail]
 
-                # Train CF
-                user_emb_cf, item_emb_cf = train_model(mode='cf', keep_rate=1-self.drop_rate)
-
-                if self.use_attention:
-                    item_emb_fused, _ = self.attention_item(torch.stack([item_emb_cf, item_emb_kg], dim=1))
-                else:
-                    item_emb_fused = torch.mean(torch.stack([item_emb_cf, item_emb_kg], dim=1), dim=1)
+                    # Train CF
+                    user_emb_cf, item_emb_cf = train_model(mode='cf', keep_rate=1-self.drop_rate)
+                    if self.use_attention:
+                        item_emb_fused, _ = self.attention_item(torch.stack([item_emb_cf, item_emb_kg], dim=1))
+                    else:
+                        item_emb_fused = torch.mean(torch.stack([item_emb_cf, item_emb_kg], dim=1), dim=1)
+                        
+                    h_cf = torch.cat([user_emb_cf, item_emb_cf], dim=0)
+                    h_kg = torch.cat([user_emb_kg, item_emb_kg], dim=0)
                     
-                h_cf = torch.cat([user_emb_cf, item_emb_cf], dim=0)
-                h_kg = torch.cat([user_emb_kg, item_emb_kg], dim=0)
-                
-                anchor_emb = user_emb_cf[user_idx]
-                pos_emb = item_emb_fused[pos_idx]
-                neg_emb = item_emb_fused[neg_idx]
+                    anchor_emb = user_emb_cf[user_idx]
+                    pos_emb = item_emb_fused[pos_idx]
+                    neg_emb = item_emb_fused[neg_idx]
 
-                cf_batch_loss = train_model.calculate_cf_loss(anchor_emb, pos_emb, neg_emb, self.reg)
-                kg_batch_loss = train_model.calculate_kg_loss(kg_batch_head_emb, kg_batch_relation, kg_batch_pos_tail_emb, kg_batch_neg_tail_emb, self.reg_kg)
-                
-                cf_total_loss += cf_batch_loss.item()
-                kg_total_loss +=  kg_batch_loss.item()
-                
-                if self.use_contrastive:
-                    cl_batch_loss = self.cl_rate * train_model.calculate_ssl_loss(self.data, user_idx, pos_idx, h_cf, h_kg, self.temp)
-                    cl_losses.append(cl_batch_loss.item())
-                    cl_total_loss += cl_batch_loss.item()
-                    batch_loss = cf_batch_loss + kg_batch_loss + cl_batch_loss
-                else:
-                    cl_batch_loss = 0
-                    batch_loss = cf_batch_loss + kg_batch_loss 
-
-                self.optimizer.zero_grad()
-                batch_loss.backward()
-                self.optimizer.step()
-
-                cf_losses.append(cf_batch_loss.item())
-                kg_losses.append(kg_batch_loss.item())
-                if (n % 20) == 0:
+                    cf_batch_loss = train_model.calculate_cf_loss(anchor_emb, pos_emb, neg_emb, self.reg)
+                    kg_batch_loss = train_model.calculate_kg_loss(kg_batch_head_emb, kg_batch_relation, kg_batch_pos_tail_emb, kg_batch_neg_tail_emb, self.reg_kg)
+                    
+                    cf_total_loss += cf_batch_loss.item()
+                    kg_total_loss +=  kg_batch_loss.item()
+                    
                     if self.use_contrastive:
-                        print('CF Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch,  cf_batch_loss.item(), cf_total_loss / (n+1)))
-                        print('KG Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch, kg_batch_loss.item(), kg_total_loss / (n+1)))
-                        print('CL Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch, cl_batch_loss.item(), cl_total_loss / (n+1)))
-                    else:                                        
-                        print('CF Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch,  cf_batch_loss.item(), cf_total_loss / (n+1)))
-                        print('KG Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch, kg_batch_loss.item(), kg_total_loss / (n+1)))
+                        cl_batch_loss = self.cl_rate * train_model.calculate_ssl_loss(self.data, user_idx, pos_idx, h_cf, h_kg, self.temp)
+                        cl_losses.append(cl_batch_loss.item())
+                        cl_total_loss += cl_batch_loss.item()
+                        batch_loss = cf_batch_loss + kg_batch_loss + cl_batch_loss
+                    else:
+                        cl_batch_loss = 0
+                        batch_loss = cf_batch_loss + kg_batch_loss 
+                            
+                    cf_losses.append(cf_batch_loss.item())
+                    kg_losses.append(kg_batch_loss.item())
+                    
+                    self.optimizer.zero_grad()
+                    batch_loss.backward()
+                    self.optimizer.step()
 
-            cf_loss = np.mean(cf_losses)
-            kg_loss = np.mean(kg_losses)
+                    if (n % 20) == 0:
+                        if self.use_contrastive:
+                            print('CF Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch,  cf_batch_loss.item(), cf_total_loss / (n+1)))
+                            print('KG Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch, kg_batch_loss.item(), kg_total_loss / (n+1)))
+                            print('CL Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch, cl_batch_loss.item(), cl_total_loss / (n+1)))
+                        else:                                        
+                            print('CF Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch,  cf_batch_loss.item(), cf_total_loss / (n+1)))
+                            print('KG Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch, kg_batch_loss.item(), kg_total_loss / (n+1)))
 
-            if self.use_contrastive:
-                cl_loss = np.mean(cl_losses)
-                train_loss = cf_loss + kg_loss + cl_loss 
+                cf_loss = np.mean(cf_losses)
+                kg_loss = np.mean(kg_losses)
+
+                if self.use_contrastive:
+                    cl_loss = np.mean(cl_losses)
+                    train_loss = cf_loss + kg_loss + cl_loss 
+                else:
+                    cl_loss  = 0
+                    train_loss = cf_loss + kg_loss
+
+                lst_cf_losses.append([ep,cf_loss])
+                lst_kg_losses.append([ep, kg_loss])
+                lst_train_losses.append([ep, train_loss])
+                lst_cl_losses.append([ep, cl_loss])
+                
+                self.scheduler.step(train_loss)
+                
+                # Evaluation
+                train_model.eval()
+                self.attention_user.eval()
+                self.attention_item.eval()
+                
+                with torch.no_grad():
+                    user_emb_cf, item_emb_cf = train_model(mode='cf')
+                    ego_emb = train_model(mode='kg')
+                    user_emb_kg, item_emb_kg = ego_emb[train_model.user_indices], ego_emb[train_model.item_indices]
+                    item_emb, _ = self.attention_item(torch.stack([item_emb_cf, item_emb_kg], dim=1))
+                    
+                    self.user_emb, self.item_emb = user_emb_cf, item_emb
+                    data_ep = self.fast_evaluation(ep, train_model)
+                
+                    cur_recall =  float(data_ep[2].split(':')[1])
+                    recall_list.append(cur_recall)
+                    best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
+                    
+                    if should_stop:
+                        break 
+
+                self.save_performance_row(ep, data_ep)
+                self.save_loss_row([ep, train_loss, cf_loss, kg_loss, cl_loss])
+                lst_performances.append(data_ep)
             else:
-                cl_loss  = 0
-                train_loss = cf_loss + kg_loss
+                for n, batch in enumerate(next_batch_pairwise(self.data, self.batch_size, device=self.device)):
+                    user_idx, pos_idx, neg_idx = batch
 
-            lst_cf_losses.append([ep,cf_loss])
-            lst_kg_losses.append([ep, kg_loss])
-            lst_train_losses.append([ep, train_loss])
-            lst_cl_losses.append([ep, cl_loss])
-            
-            self.scheduler.step(train_loss)
-            
-            # Evaluation
-            train_model.eval()
-            self.attention_user.eval()
-            self.attention_item.eval()
-            
-            with torch.no_grad():
-                user_emb_cf, item_emb_cf = train_model(mode='cf')
-                ego_emb = train_model(mode='kg')
-                user_emb_kg, item_emb_kg = ego_emb[train_model.user_indices], ego_emb[train_model.item_indices]
-                item_emb, _ = self.attention_item(torch.stack([item_emb_cf, item_emb_kg], dim=1))
+                    # Train CF
+                    user_emb_cf, item_emb_cf = train_model(mode='cf', keep_rate=1-self.drop_rate)
+                    
+                    anchor_emb = user_emb_cf[user_idx]
+                    pos_emb = item_emb_cf[pos_idx]
+                    neg_emb = item_emb_cf[neg_idx]
+
+                    cf_batch_loss = train_model.calculate_cf_loss(anchor_emb, pos_emb, neg_emb, self.reg)
+                    cf_total_loss += cf_batch_loss.item()
+                    cl_batch_loss = 0
+                    batch_loss = cf_batch_loss
+                    cf_losses.append(cf_batch_loss.item())
+                    
+                    self.optimizer.zero_grad()
+                    batch_loss.backward()
+                    self.optimizer.step()
+                    if (n % 20) == 0:
+                        print('CF Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_cf_batch,  cf_batch_loss.item(), cf_total_loss / (n+1)))
+
+                cf_loss = np.mean(cf_losses)
+                train_loss = cf_loss
+                lst_cf_losses.append([ep,cf_loss])
+                lst_train_losses.append([ep, cf_loss])
+                self.scheduler.step(cf_loss)
                 
-                self.user_emb, self.item_emb = user_emb_cf, item_emb
-                data_ep = self.fast_evaluation(ep, train_model)
-            
-                cur_recall =  float(data_ep[2].split(':')[1])
-                recall_list.append(cur_recall)
-                best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
+                # Evaluation
+                train_model.eval()
                 
-                if should_stop:
-                    break 
+                with torch.no_grad():
+                    user_emb_cf, item_emb_cf = train_model(mode='cf')
+                    
+                    self.user_emb, self.item_emb = user_emb_cf, item_emb_cf
+                    data_ep = self.fast_evaluation(ep, train_model)
+                
+                    cur_recall =  float(data_ep[2].split(':')[1])
+                    recall_list.append(cur_recall)
+                    best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
+                    
+                    if should_stop:
+                        break 
 
-            self.save_performance_row(ep, data_ep)
-            self.save_loss_row([ep, train_loss, cf_loss, kg_loss, cl_loss])
-            lst_performances.append(data_ep)
-
+                self.save_performance_row(ep, data_ep)
+                self.save_loss_row([ep, train_loss, cf_loss, 0, 0])
+                lst_performances.append(data_ep)
         self.save_loss(lst_train_losses, lst_cf_losses, lst_kg_losses, lst_cl_losses)
         self.save_perfomance_training(lst_performances)
         self.user_emb, self.item_emb = self.best_user_emb, self.best_item_emb
@@ -218,10 +276,11 @@ class HGNN(GraphRecommender):
         return rec_loss, reg_loss
 
 class HGNNModel(nn.Module):
-    def __init__(self, data, data_kg, args, device):
+    def __init__(self, data, data_kg, args, device, use_hyper=True):
         super(HGNNModel, self).__init__()
         self.data = data
         self.data_kg = data_kg 
+        self.use_hyper =use_hyper
         
         self.device = device
         self.use_drop_edge = False
@@ -239,8 +298,8 @@ class HGNNModel(nn.Module):
         self.hgnn_cf = []
         self.hgnn_kg  = []
         
-        self.hgnn_layer_cf = SelfAwareEncoder(self.data, self.emb_size, self.hyper_size, self.layers, self.p, self.drop_rate, self.device)
-        self.hgnn_layer_kg = RelationalAwareEncoder(self.p, self.drop_rate, self.layers, self.hyper_size)
+        self.hgnn_layer_cf = SelfAwareEncoder(self.data, self.emb_size, self.hyper_size, self.layers, self.p, self.drop_rate, self.device, use_hyper=self.use_hyper)
+        self.hgnn_layer_kg = RelationalAwareEncoder(self.p, self.drop_rate, self.layers, self.hyper_size, use_hyper=self.use_hyper)
         self.relation_emb = nn.Parameter(init.xavier_uniform_(torch.empty(self.data_kg.n_relations, self.input_dim))).to(self.device)
         self.trans_M = nn.Parameter(init.xavier_uniform_(torch.empty(self.data_kg.n_relations, self.hyper_dim, self.relation_dim))).to(self.device)
         self.act = nn.LeakyReLU(self.p)
@@ -360,7 +419,7 @@ class HGNNModel(nn.Module):
         return sslLoss
 
 class SelfAwareEncoder(nn.Module):
-    def __init__(self, data, emb_size, hyper_size, n_layers, leaky, drop_rate, device):
+    def __init__(self, data, emb_size, hyper_size, n_layers, leaky, drop_rate, device, use_hyper):
         super(SelfAwareEncoder, self).__init__()
         self.data = data
         self.latent_size = emb_size
@@ -380,7 +439,10 @@ class SelfAwareEncoder(nn.Module):
             encoder_layers = TransformerEncoderLayer(d_model=hyper_size, nhead=1, dim_feedforward=32, dropout=drop_rate) # Default batch_first=False (seq, batch, feature)
             enc_norm = nn.LayerNorm(hyper_size)
             self.ugformer_layers.append(TransformerEncoder(encoder_layers, 1, norm=enc_norm).to(device))
-            self.hgnn_layers.append(HGCNConv(leaky=leaky))
+            if use_hyper:
+                self.hgnn_layers.append(HGCNConv(leaky=leaky))
+            else: 
+                self.hgnn_layers.append(GCNConv(leaky=leaky))
             self.lns.append(torch.nn.LayerNorm(hyper_size))
 
     def forward(self, ego_embeddings, sparse_norm_adj):
@@ -402,7 +464,7 @@ class SelfAwareEncoder(nn.Module):
         return user_all_embeddings, item_all_embeddings
 
 class RelationalAwareEncoder(nn.Module):
-    def __init__(self, leaky, dropout, n_layers, hyper_dim):
+    def __init__(self, leaky, dropout, n_layers, hyper_dim, use_hyper):
         super(RelationalAwareEncoder, self).__init__()
         self.leaky = leaky 
         self.dropout = dropout 
@@ -410,7 +472,10 @@ class RelationalAwareEncoder(nn.Module):
         self.convs = torch.nn.ModuleList()
         self.lns = torch.nn.ModuleList()
         for i in range(n_layers):
-            self.convs.append(AttHGCNConv(leaky=leaky))
+            if use_hyper:
+                self.convs.append(AttHGCNConv(leaky=leaky))
+            else:
+                self.convs.append(AttGCNConv(leaky=leaky))
             self.lns.append(torch.nn.LayerNorm(hyper_dim))
             
     def forward(self, embs, sparse_adj, att_adj):
@@ -422,14 +487,36 @@ class RelationalAwareEncoder(nn.Module):
                 embs = self.lns[i](conv(sparse_adj, att_adj, embs, act=False)) + residual
         return embs 
 
+class AttGCNConv(nn.Module):
+    def __init__(self, leaky):
+        super(AttGCNConv, self).__init__()
+        self.act = nn.LeakyReLU(negative_slope=leaky)
+        
+    def forward(self, adj, att_adj, embs, act=True):
+        adj = torch.sparse.mm(att_adj,adj)
+        if act:
+            return self.act(torch.sparse.mm(adj, embs))
+        else:
+            return torch.sparse.mm(adj, embs)
+
+class GCNConv(nn.Module):
+    def __init__(self, leaky):
+        super(GCNConv, self).__init__()
+        self.act = nn.LeakyReLU(negative_slope=leaky)
+        
+    def forward(self, adj, embs, act=True):
+        if act:
+            return self.act(torch.sparse.mm(adj, embs))
+        else:
+            return torch.sparse.mm(adj, embs)
+
 class AttHGCNConv(nn.Module):
     def __init__(self, leaky):
         super(AttHGCNConv, self).__init__()
         self.act = nn.LeakyReLU(negative_slope=leaky)
 
-    def forward(self, inp_adj, att_adj, embs, act=True):
-        # adj = torch.sparse.mm(att_adj,inp_adj)
-        adj = inp_adj 
+    def forward(self, adj, att_adj, embs, act=True):
+        adj = torch.sparse.mm(att_adj,adj)
         if act:
             return self.act(torch.sparse.mm(adj,  torch.sparse.mm(adj.t(), embs)))
         else:

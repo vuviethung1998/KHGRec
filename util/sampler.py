@@ -234,7 +234,7 @@ def next_batch_kg(rec, batch_size):
         yield batch_head, batch_relation, batch_pos_tail, batch_neg_tail    
 
 
-def next_batch_pairwise(data,batch_size,n_negs=1):
+def next_batch_pairwise(data,batch_size,n_negs=1, device=None):
     training_data = data.training_data
     shuffle(training_data)
     ptr = 0
@@ -258,9 +258,9 @@ def next_batch_pairwise(data,batch_size,n_negs=1):
                     neg_item = choice(item_list)
                 j_idx.append(data.item[neg_item])
 
-        u_idx  = torch.LongTensor(u_idx).cuda()
-        i_idx  = torch.LongTensor(i_idx).cuda()
-        j_idx  = torch.LongTensor(j_idx).cuda()
+        u_idx  = torch.LongTensor(u_idx).to(device)
+        i_idx  = torch.LongTensor(i_idx).to(device)
+        j_idx  = torch.LongTensor(j_idx).to(device)
         yield u_idx, i_idx, j_idx
 
 def next_batch_pointwise(data,batch_size):

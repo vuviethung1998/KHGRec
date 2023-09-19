@@ -28,7 +28,7 @@ def parse_arguments():
                         help='Batch size')
     parser.add_argument('--hyperedge_num', type=int, default=128,
                         help='Hyperedge num')
-    parser.add_argument('--batch_size_kg', type=int, default=8192,
+    parser.add_argument('--batch_size_kg', type=int, default=8096,
                         help='Batch size KG')
     parser.add_argument('--n_layers', type=int, default=2,
                         help='n_layers')
@@ -65,7 +65,7 @@ def parse_arguments():
     #                     help='Active to perform attention feature fusion')
     parser.add_argument('--mode',
                     default='full',
-                    choices=['full', 'wo_attention', 'wo_ssl'],
+                    choices=['full', 'woatt', 'wossl', 'wohyper', 'woglobal'],
                     help='Mode')
     parser.add_argument('--aug_type', type=int, default=1,
                         help='Aug type')
@@ -94,7 +94,8 @@ def parse_arguments():
 if __name__ == '__main__':
     # Register your model here
     graph_baselines = ['LightGCN','DirectAU','MF','SASRec', 'KGAT', 'HGCN', 'KHGRec', 'DHCF']
-    ssl_graph_models = ['SGL', 'SimGCL', 'SEPT', 'MHCN', 'BUIR', 'SelfCF', 'SSL4Rec', 'XSimGCL', 'NCL','MixGCF', 'HKGRippleNet', 'HGNN', 'HCCF', 'SHT']
+    ssl_graph_models = ['SGL', 'SimGCL', 'SEPT', 'MHCN', 'BUIR', 'SelfCF', 'SSL4Rec', 'XSimGCL', 'NCL',\
+                        'MixGCF', 'HKGRippleNet', 'HGNN', 'HGNNAblation', 'HCCF', 'SHT']
     sequential_baselines= ['SASRec']
     ssl_sequential_models = ['CL4SRec']
 
