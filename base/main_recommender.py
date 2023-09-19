@@ -28,14 +28,11 @@ class GraphRecommender(Recommender):
         
         self.dataset = kwargs['dataset']
         
-        if kwargs['mode'] =='full':
-            model_name = "HGNN_KG_SSL_Attention"
-        elif kwargs['mode'] == 'wo_attention':
-            model_name = "HGNN_KG_SSL"
-        elif kwargs['mode'] == 'wo_ssl':
-            model_name = "HGNN_KG"
-        
-        self.output = f"./results/{model_name}/{self.dataset}/@{self.model_name}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-bs:{self.batch_size}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-weight_decay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-cl_rate:{kwargs['cl_rate']}-temp:{kwargs['temp']}/"
+        model_name = "HGNN_KG_SSL_Attention"
+        if kwargs['mode'] == 'full':
+            self.output = f"./results/{model_name}/{self.dataset}/@{self.model_name}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-bs:{self.batch_size}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-weight_decay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-cl_rate:{kwargs['cl_rate']}-temp:{kwargs['temp']}/"
+        else:
+            self.output = f"./results/{model_name}/ablation/{kwargs['mode']}/{self.dataset}/@{self.model_name}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-bs:{self.batch_size}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-weight_decay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-cl_rate:{kwargs['cl_rate']}-temp:{kwargs['temp']}/"
         if not os.path.exists(self.output):
             os.makedirs(self.output)
 
@@ -220,12 +217,15 @@ class GraphRecommender(Recommender):
     def save_loss(self, train_losses, cf_losses, kg_losses, cl_losses):
         df_train_loss = pd.DataFrame(train_losses, columns = ['ep', 'loss'])
         df_cf_loss = pd.DataFrame(cf_losses, columns = ['ep', 'loss'])
-        df_kg_loss = pd.DataFrame(kg_losses, columns = ['ep', 'loss'])
-        df_cl_loss = pd.DataFrame(cl_losses, columns = ['ep', 'loss'])
         df_train_loss.to_csv(self.output + '/train_loss.csv')
         df_cf_loss.to_csv(self.output + '/cf_loss.csv')
-        df_kg_loss.to_csv(self.output + '/kg_loss.csv')
-        df_cl_loss.to_csv(self.output + '/cl_loss.csv')
+        
+        if len(kg_losses) != 0:          
+            df_kg_loss = pd.DataFrame(kg_losses, columns = ['ep', 'loss'])
+            df_kg_loss.to_csv(self.output + '/kg_loss.csv')
+        if len(cl_losses) != 0:
+            df_cl_loss = pd.DataFrame(cl_losses, columns = ['ep', 'loss'])
+            df_cl_loss.to_csv(self.output + '/cl_loss.csv')
 
     def save_perfomance_training(self, log_train):
         df_train_log = pd.DataFrame(log_train)
