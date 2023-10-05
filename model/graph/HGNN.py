@@ -377,9 +377,9 @@ class SelfAwareEncoder(nn.Module):
         self.lns = torch.nn.ModuleList()
 
         for i in range(self.layers):
-            encoder_layers = TransformerEncoderLayer(d_model=hyper_size, nhead=1, dim_feedforward=32, dropout=drop_rate) # Default batch_first=False (seq, batch, feature)
-            enc_norm = nn.LayerNorm(hyper_size)
-            self.ugformer_layers.append(TransformerEncoder(encoder_layers, 1, norm=enc_norm).to(device))
+            # encoder_layers = TransformerEncoderLayer(d_model=hyper_size, nhead=1, dim_feedforward=32, dropout=drop_rate) # Default batch_first=False (seq, batch, feature)
+            # enc_norm = nn.LayerNorm(hyper_size)
+            # self.ugformer_layers.append(TransformerEncoder(encoder_layers, 1, norm=enc_norm).to(device))
             self.hgnn_layers.append(HGCNConv(leaky=leaky))
             self.lns.append(torch.nn.LayerNorm(hyper_size))
 
@@ -388,9 +388,9 @@ class SelfAwareEncoder(nn.Module):
         all_embeddings = []
         for k in range(self.layers):
             # self-attention over all nodes
-            input_Tr = torch.unsqueeze(ego_embeddings, 1)  #[seq_length, batch_size=1, dim] for pytorch transformer
-            input_Tr = self.ugformer_layers[k](input_Tr)
-            ego_embeddings = torch.squeeze(input_Tr, 1)
+            # input_Tr = torch.unsqueeze(ego_embeddings, 1)  #[seq_length, batch_size=1, dim] for pytorch transformer
+            # input_Tr = self.ugformer_layers[k](input_Tr)
+            # ego_embeddings = torch.squeeze(input_Tr, 1)
             if k != self.layers - 1: 
                 ego_embeddings = self.lns[k](self.hgnn_layers[k](sparse_norm_adj, ego_embeddings))  + res
             else:
