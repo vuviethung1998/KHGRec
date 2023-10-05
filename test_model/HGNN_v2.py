@@ -450,7 +450,10 @@ class RelationalAwareHGCNConv(nn.Module):
         self.residuals = torch.nn.ModuleList()
         self.hyperedge_fc = torch.nn.ModuleList()
 
+<<<<<<< HEAD:model/graph/HGNN_v3.py
+=======
 
+>>>>>>> 6dd1200558986a3f62071f90335ac8b50271caf0:test_model/HGNN_v2.py
         for i in range(n_layers):
             first_channels = input_dim if i == 0 else hidden_dim
             second_channels = hyper_dim if i == n_layers - 1 else hidden_dim
@@ -460,15 +463,45 @@ class RelationalAwareHGCNConv(nn.Module):
             self.residuals.append(nn.Linear(input_dim, second_channels).cuda())
             self.hyperedge_fc.append(nn.Linear(input_dim, first_channels).cuda())
 
+<<<<<<< HEAD:model/graph/HGNN_v3.py
+    def relation_aware_attention(self, head_ent_embs, tail_ent_embs, rel_embs, adj):
+        # item_embs: N, dim
+        # entity_embs: N, e_num, dim
+        # relations: N, e_num, r_dim
+        # adj: N, e_num
+        
+        # N, e_num, dim
+        Wh = head_ent_embs.unsqueeze(1).expand(tail_ent_embs.size())
+        # N, e_num, dim
+        We = tail_ent_embs
+        a_input = torch.cat((Wh,We),dim=-1) # (N, e_num, 2*dim)
+        # N,e,2dim -> N,e,dim
+        e_input = torch.multiply(self.fc(a_input), rel_embs).sum(-1) # N,e
+        e = self.act(e_input) # (N, e_num)
+
+        zero_vec = -9e15*torch.ones_like(e)
+        attention = torch.where(adj > 0, e, zero_vec)
+        attention = F.softmax(attention, dim=1)
+        attention = F.dropout(attention, self.dropout, training=self.training) # N, e_num
+        # (N, 1, e_num) * (N, e_num, out_features) -> N, out_features
+        entity_emb_weighted = torch.bmm(attention.unsqueeze(1), tail_ent_embs).squeeze()
+        entity_emb = entity_emb_weighted + head_ent_embs
+        return entity_emb
+
+    def forward(self, entity_embs, adj):
+        embs = entity_embs
+
+=======
     def forward(self, inp, adj, hyperedge_attr=None):
         embs = inp
+>>>>>>> 6dd1200558986a3f62071f90335ac8b50271caf0:test_model/HGNN_v2.py
         for i, conv in enumerate(self.convs):
-            residual = self.residuals[i](inp)
+            residual = self.residuals[i](entity_embs)
             if i != self.n_layers - 1:
                 embs = self.act(self.lns[i](conv(embs, adj))) + residual
             else:
                 embs = self.lns[i](conv(embs, adj)) + residual
-        return embs 
+        return embs
 
 class Attention(nn.Module):
     # This class module is a simple attention layer.
