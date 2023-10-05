@@ -6,6 +6,8 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 import time
+from time import time as ti
+
 import os, sys
 from os.path import abspath
 import random 
@@ -79,6 +81,7 @@ class KGAT(KGGraphRecommender):
             n_kg_batch = int(self.data_kg.n_kg_train // self.batchSizeKG + 1)
                         
             # Learn cf graph
+            train_s_t = ti()
             for n, batch in enumerate(next_batch_pairwise(self.data, self.batchSize, device=device)):
                 user_idx, pos_idx, neg_idx = batch
                 entity_emb = self.model.calc_cf_embeddings()
@@ -118,6 +121,7 @@ class KGAT(KGGraphRecommender):
                 kg_losses.append(kg_batch_loss.item())
                 if (n % 10) == 0:
                     print('KG Training: Epoch {:04d} Iter {:04d} / {:04d} | Iter Loss {:.4f} | Iter Mean Loss {:.4f}'.format(ep, n, n_kg_batch,  kg_batch_loss.item(), kg_total_loss / (n+1)))
+            train_e_t = ti()
             
             # Learn attention 
             h_list = self.data_kg.h_list.to(device)
@@ -138,7 +142,7 @@ class KGAT(KGGraphRecommender):
                 entity_emb = self.model.calc_cf_embeddings()
                 user_emb = entity_emb[self.model.user_indices]
                 item_emb = entity_emb[self.model.item_indices]
-                data_ep = self.fast_evaluation(self.model, ep, user_emb, item_emb)
+                test_t, data_ep = self.fast_evaluation(self.model, ep, user_emb, item_emb)
 
                 cur_recall =  float(data_ep[2].split(':')[1])
                 recall_list.append(cur_recall)
@@ -147,7 +151,7 @@ class KGAT(KGGraphRecommender):
             if should_stop:
                 break
             
-            self.save_performance_row(ep, data_ep)
+            self.save_performance_row(ep, (train_e_t - train_s_t), test_t, data_ep)
             self.save_loss_row([ep, train_loss, cf_loss, kg_loss])
         
             lst_performances.append(data_ep)
@@ -162,7 +166,7 @@ class KGAT(KGGraphRecommender):
 
     def predict(self, u):
         user_id = self.data_kg.u2id[u]
-        score = torch.matmul(self.user_emb[user_id], self.item_emb.transpose(0, 1))
+        score = torch.matmul(self.best_user_emb[user_id], self.best_item_emb.transpose(0, 1))
         return score.cpu().numpy()
 
 class Aggregator(nn.Module):

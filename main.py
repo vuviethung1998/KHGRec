@@ -20,7 +20,7 @@ def parse_arguments():
                         help='KG loss pct')
     parser.add_argument('--lrate', type=float, default=0.001,
                         help='Lrate')
-    parser.add_argument('--item_ranking', type=str, default='20,40')
+    parser.add_argument('--item_ranking', type=str, default='10,20,40')
     
     parser.add_argument('--max_epoch', type=int, default=500,
                         help='Max Epoch')

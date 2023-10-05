@@ -158,7 +158,7 @@ class KGGraphRecommender(Recommender):
         print('*Best Performance* ')
         print('Epoch:fast_evaluation', str(self.bestPerformance[0]) + ',', bp)
         print('-' * 120)
-        return measure
+        return (e_test - s_test), measure
     
     def save(self, model):
         with torch.no_grad():
@@ -176,7 +176,7 @@ class KGGraphRecommender(Recommender):
         weight_file = out_dir + '/' + file_name 
         torch.save(model.state_dict(), weight_file)
 
-    def save_performance_row(self, ep, data_ep):
+    def save_performance_row(self, ep, train_t, test_t, data_ep):
         # opening the csv file in 'w' mode
         csv_path = self.output_path + 'train_performance.csv'
         
@@ -187,11 +187,13 @@ class KGGraphRecommender(Recommender):
         ndcg = float(data_ep[3].split(':')[1])
         
         with open(csv_path, 'a+', newline = '') as f:
-            header = ['ep', 'hit@20', 'prec@20', 'recall@20', 'ndcg@20']
+            header = ['ep', 'training_time', 'testing_time', 'hit@20', 'prec@20', 'recall@20', 'ndcg@20']
             writer = csv.DictWriter(f, fieldnames = header)
             # writer.writeheader()
             writer.writerow({
                  'ep' : ep,
+                 'training_time': train_t,
+                 'testing_time': test_t, 
                  'hit@20': hit,
                  'prec@20': precision,
                  'recall@20': recall,
