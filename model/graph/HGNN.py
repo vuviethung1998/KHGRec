@@ -360,7 +360,7 @@ class HGNNModel(nn.Module):
         return sslLoss
 
 class SelfAwareEncoder(nn.Module):
-    def __init__(self, data, emb_size, hyper_size, n_layers, leaky, drop_rate, device):
+    def __init__(self, data, emb_size, hyper_size, n_layers, leaky, drop_rate, device, use_self_att=True):
         super(SelfAwareEncoder, self).__init__()
         self.data = data
         self.latent_size = emb_size
@@ -371,15 +371,17 @@ class SelfAwareEncoder(nn.Module):
         self.act = nn.LeakyReLU(leaky)
         self.dropout = nn.Dropout(drop_rate)
         self.edgeDropper = SpAdjDropEdge()
+        
+        self.use_self_att = use_self_att
 
         self.hgnn_layers = torch.nn.ModuleList()
         self.ugformer_layers = torch.nn.ModuleList()
         self.lns = torch.nn.ModuleList()
 
         for i in range(self.layers):
-            # encoder_layers = TransformerEncoderLayer(d_model=hyper_size, nhead=1, dim_feedforward=32, dropout=drop_rate) # Default batch_first=False (seq, batch, feature)
-            # enc_norm = nn.LayerNorm(hyper_size)
-            # self.ugformer_layers.append(TransformerEncoder(encoder_layers, 1, norm=enc_norm).to(device))
+            encoder_layers = TransformerEncoderLayer(d_model=hyper_size, nhead=2, dim_feedforward=32, dropout=drop_rate) # Default batch_first=False (seq, batch, feature)
+            enc_norm = nn.LayerNorm(hyper_size)
+            self.ugformer_layers.append(TransformerEncoder(encoder_layers, 2, norm=enc_norm).to(device))
             self.hgnn_layers.append(HGCNConv(leaky=leaky))
             self.lns.append(torch.nn.LayerNorm(hyper_size))
 
@@ -387,10 +389,11 @@ class SelfAwareEncoder(nn.Module):
         res = ego_embeddings
         all_embeddings = []
         for k in range(self.layers):
-            # self-attention over all nodes
-            # input_Tr = torch.unsqueeze(ego_embeddings, 1)  #[seq_length, batch_size=1, dim] for pytorch transformer
-            # input_Tr = self.ugformer_layers[k](input_Tr)
-            # ego_embeddings = torch.squeeze(input_Tr, 1)
+            if self.use_self_att:
+                # self-attention over all nodes
+                input_Tr = torch.unsqueeze(ego_embeddings, 1)  #[seq_length, batch_size=1, dim] for pytorch transformer
+                input_Tr = self.ugformer_layers[k](input_Tr)
+                ego_embeddings = torch.squeeze(input_Tr, 1)
             if k != self.layers - 1: 
                 ego_embeddings = self.lns[k](self.hgnn_layers[k](sparse_norm_adj, ego_embeddings))  + res
             else:
@@ -428,7 +431,7 @@ class AttHGCNConv(nn.Module):
         self.act = nn.LeakyReLU(negative_slope=leaky)
 
     def forward(self, inp_adj, att_adj, embs, act=True):
-        # adj = torch.sparse.mm(att_adj,inp_adj)
+        adj = torch.sparse.mm(att_adj,inp_adj)
         adj = inp_adj 
         if act:
             return self.act(torch.sparse.mm(adj,  torch.sparse.mm(adj.t(), embs)))
