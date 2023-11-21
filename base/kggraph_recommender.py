@@ -25,8 +25,17 @@ class KGGraphRecommender(Recommender):
         top = self.ranking.split(',')
         self.topN = [int(num) for num in top]
         self.max_N = max(self.topN)
-        
-        self.output_path =  f"./results/{kwargs['model']}/{kwargs['dataset']}/@KGAT-inp_emb:{kwargs['input_dim']}-emb:{kwargs['embedding_size']}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-n_layers:{kwargs['n_layers']}/"
+
+        exp = kwargs['experiment']
+        if exp == 'cold_start':
+            exp_name = f"cold_start_{kwargs['group_id']}"
+        elif exp == 'missing':
+            exp_name = f"missing_{kwargs['missing_pct']}"
+        elif exp == 'add_noise':
+            exp_name = f"add_noise_{kwargs['noise_pct']}"
+        else:
+            exp_name = 'full'
+        self.output_path =  f"./results/{kwargs['model']}/{kwargs['dataset']}/{exp_name}/@KGAT-inp_emb:{kwargs['input_dim']}-emb:{kwargs['embedding_size']}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-n_layers:{kwargs['n_layers']}/"
         if not os.path.exists(self.output_path):
             os.makedirs(self.output_path)
             
@@ -158,7 +167,7 @@ class KGGraphRecommender(Recommender):
         print('*Best Performance* ')
         print('Epoch:fast_evaluation', str(self.bestPerformance[0]) + ',', bp)
         print('-' * 120)
-        return measure
+        return (e_test - s_test), measure
     
     def save(self, model):
         with torch.no_grad():
@@ -176,7 +185,7 @@ class KGGraphRecommender(Recommender):
         weight_file = out_dir + '/' + file_name 
         torch.save(model.state_dict(), weight_file)
 
-    def save_performance_row(self, ep, data_ep):
+    def save_performance_row(self, ep, train_t, test_t, data_ep):
         # opening the csv file in 'w' mode
         csv_path = self.output_path + 'train_performance.csv'
         
@@ -187,11 +196,13 @@ class KGGraphRecommender(Recommender):
         ndcg = float(data_ep[3].split(':')[1])
         
         with open(csv_path, 'a+', newline = '') as f:
-            header = ['ep', 'hit@20', 'prec@20', 'recall@20', 'ndcg@20']
+            header = ['ep', 'training_time', 'testing_time', 'hit@20', 'prec@20', 'recall@20', 'ndcg@20']
             writer = csv.DictWriter(f, fieldnames = header)
             # writer.writeheader()
             writer.writerow({
                  'ep' : ep,
+                 'training_time': train_t,
+                 'testing_time': test_t, 
                  'hit@20': hit,
                  'prec@20': precision,
                  'recall@20': recall,
@@ -221,7 +232,7 @@ class KGGraphRecommender(Recommender):
     
     def save_perfomance_training(self, log_train):
         df_train_log = pd.DataFrame(log_train)
-        df_train_log.to_csv(self.output_path + '/train_performance.csv')
+        df_train_log.to_csv(self.output_path + '/performance.csv')
 
 def test(data, data_kg, user_emb, item_emb, max_N):
     def process_bar(num, total):

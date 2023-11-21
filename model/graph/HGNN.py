@@ -80,7 +80,7 @@ class HGNN(GraphRecommender):
         os.environ["PYTHONHASHSEED"] = str(seed)
         print(f"Random seed set as {seed}")
 
-    def train(self):
+    def train(self, load_pretrained=False):
         print("start training")
         train_model = self.model 
         lst_train_losses = []
@@ -367,7 +367,7 @@ class SelfAwareEncoder(nn.Module):
         self.hyper_size = hyper_size
         self.layers = n_layers
         self.norm_adj = data.norm_adj
-        self.relu = nn.ReLU()
+        self.gelu = nn.GELU()
         self.act = nn.LeakyReLU(leaky)
         self.dropout = nn.Dropout(drop_rate)
         self.edgeDropper = SpAdjDropEdge()
@@ -379,7 +379,7 @@ class SelfAwareEncoder(nn.Module):
         self.lns = torch.nn.ModuleList()
 
         for i in range(self.layers):
-            encoder_layers = TransformerEncoderLayer(d_model=hyper_size, nhead=2, dim_feedforward=32, dropout=drop_rate) # Default batch_first=False (seq, batch, feature)
+            encoder_layers = TransformerEncoderLayer(d_model=hyper_size, nhead=1, dim_feedforward=32, dropout=drop_rate) # Default batch_first=False (seq, batch, feature)
             enc_norm = nn.LayerNorm(hyper_size)
             self.ugformer_layers.append(TransformerEncoder(encoder_layers, 2, norm=enc_norm).to(device))
             self.hgnn_layers.append(HGCNConv(leaky=leaky))
@@ -395,7 +395,7 @@ class SelfAwareEncoder(nn.Module):
                 input_Tr = self.ugformer_layers[k](input_Tr)
                 ego_embeddings = torch.squeeze(input_Tr, 1)
             if k != self.layers - 1: 
-                ego_embeddings = self.lns[k](self.hgnn_layers[k](sparse_norm_adj, ego_embeddings))  + res
+                ego_embeddings = self.gelu(self.lns[k](self.hgnn_layers[k](sparse_norm_adj, ego_embeddings))  + res)
             else:
                 ego_embeddings = self.lns[k](self.hgnn_layers[k](sparse_norm_adj, ego_embeddings, act=False)) + res
             all_embeddings += [ego_embeddings]
@@ -410,6 +410,7 @@ class RelationalAwareEncoder(nn.Module):
         self.leaky = leaky 
         self.dropout = dropout 
         self.n_layers = n_layers
+        self.gelu = nn.GELU()
         self.convs = torch.nn.ModuleList()
         self.lns = torch.nn.ModuleList()
         for i in range(n_layers):
@@ -420,7 +421,7 @@ class RelationalAwareEncoder(nn.Module):
         residual = embs
         for i, conv in enumerate(self.convs):
             if i != self.n_layers - 1:
-                embs = self.lns[i](conv(sparse_adj, att_adj, embs)) + residual
+                embs = self.gelu(self.lns[i](conv(sparse_adj, att_adj, embs)) + residual)
             else:
                 embs = self.lns[i](conv(sparse_adj, att_adj, embs, act=False)) + residual
         return embs 
@@ -431,7 +432,7 @@ class AttHGCNConv(nn.Module):
         self.act = nn.LeakyReLU(negative_slope=leaky)
 
     def forward(self, inp_adj, att_adj, embs, act=True):
-        adj = torch.sparse.mm(att_adj,inp_adj)
+        # adj = torch.sparse.mm(att_adj,inp_adj)
         adj = inp_adj 
         if act:
             return self.act(torch.sparse.mm(adj,  torch.sparse.mm(adj.t(), embs)))
@@ -479,4 +480,4 @@ class SpAdjDropEdge(nn.Module):
 		newVals = vals[mask] / keepRate
 		newIdxs = idxs[:, mask]
 		return torch.sparse.FloatTensor(newIdxs, newVals, adj.shape)
-    
+

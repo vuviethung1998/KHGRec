@@ -5,6 +5,7 @@ from os.path import abspath
 import torch 
 import numpy as np 
 import pandas as pd
+import csv 
 
 from base.recommender import Recommender
 from data.ui_graph import Interaction
@@ -23,11 +24,21 @@ class GraphRecommender(Recommender):
         self.bestPerformance = []
         top = self.ranking.split(',')
         self.topN = [int(num) for num in top]
-        self.max_N = max(self.topN)        
-        if conf['model.name'] == 'HGNN':
-            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-temp:{kwargs['temp']}-cl_rate:{kwargs['cl_rate']}/"
+        self.max_N = max(self.topN)  
+        exp = kwargs['experiment']
+
+        if exp == 'cold_start':
+            exp_name = f"cold_start_{kwargs['group_id']}"
+        elif exp == 'missing':
+            exp_name = f"missing_{kwargs['missing_pct']}"
+        elif exp == 'add_noise':
+            exp_name = f"add_noise_{kwargs['noise_pct']}"
         else:
-            self.output = f"./results/{self.model_name}/{self.dataset}/@{self.model_name}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-wdecay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-temp:{kwargs['temp']}-cl_rate:{kwargs['cl_rate']}"
+            exp_name = 'full'
+        if conf['model.name'] == 'HGNN':
+            self.output = f"./results/{self.model_name}/{self.dataset}/{exp_name}/@{self.model_name}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-temp:{kwargs['temp']}-cl_rate:{kwargs['cl_rate']}/"
+        else:
+            self.output = f"./results/{self.model_name}/{self.dataset}/{exp_name}/@{self.model_name}-bs:{kwargs['batch_size']}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-wdecay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-temp:{kwargs['temp']}-cl_rate:{kwargs['cl_rate']}"
         if not os.path.exists(self.output):
             os.makedirs(self.output)
 
@@ -106,7 +117,7 @@ class GraphRecommender(Recommender):
         FileIO.write_file(out_dir, file_name, self.result)
         print('The result of %s:\n%s' % (self.model_name, ''.join(self.result)))
 
-    def fast_evaluation(self, epoch, kwargs=None):
+    def fast_evaluation(self, epoch, kwargs=None, train_time=None):
         print('Evaluating the model...')
         s_test = time.time()
         rec_list = self.test()
@@ -120,6 +131,8 @@ class GraphRecommender(Recommender):
     
         data_ep = {}
         data_ep['epoch'] = epoch
+        data_ep['train_time'] = train_time
+        data_ep['test_time'] = (e_test - s_test)
         for i in range(0, len(all_measures), 5):
             mes = all_measures[i:i+5]
             topk = int(mes[0].split(' ')[1][:-1])
@@ -200,4 +213,28 @@ class GraphRecommender(Recommender):
 
     def save_perfomance_training(self, log_train):
         df_train_log = pd.DataFrame(log_train)
-        df_train_log.to_csv(self.output + '/train_performance.csv')
+        df_train_log.to_csv(self.output + '/performance.csv')
+
+    def save_performance_row(self, ep, data_ep):
+        # opening the csv file in 'w' mode
+        csv_path = self.output + 'train_performance.csv'
+        
+        # 'Hit Ratio:0.00328', 'Precision:0.00202', 'Recall:0.00337', 'NDCG:0.00292
+        hit = float(data_ep[0].split(':')[1])
+        precision = float(data_ep[1].split(':')[1])
+        recall = float(data_ep[2].split(':')[1])
+        ndcg = float(data_ep[3].split(':')[1])
+
+        with open(csv_path, 'a+', newline = '') as f:
+            header = ['ep', 'training_time', 'testing_time','hit@20', 'prec@20', 'recall@20', 'ndcg@20']
+            writer = csv.DictWriter(f, fieldnames = header)
+            # writer.writeheader()
+            writer.writerow({
+                 'ep' : ep,
+                 'training_time': train_time,
+                 'testing_time': test_time, 
+                 'hit@20': hit,
+                 'prec@20': precision,
+                 'recall@20': recall,
+                 'ndcg@20': ndcg,
+            })

@@ -6,7 +6,10 @@ import argparse
 def parse_arguments():
     # Create the parser
     parser = argparse.ArgumentParser(description="Process some integers.")
-
+    parser.add_argument('--experiment', type=str, default='full', choices=['full', 'cold_start', 'missing', 'add_noise'])
+    parser.add_argument('--group_id', type=int, choices=[1, 2, 3, 4])
+    parser.add_argument('--missing_pct', type=int, choices=[10,20,30,40,50])
+    parser.add_argument('--noise_pct', type=int, choices=[10,20,30,40,50])
     # Add the arguments
     parser.add_argument('--model', type=str, default='HCCF',
                         help='Model name')
@@ -20,15 +23,15 @@ def parse_arguments():
                         help='KG loss pct')
     parser.add_argument('--lrate', type=float, default=0.001,
                         help='Lrate')
-    parser.add_argument('--item_ranking', type=str, default='20,40')
+    parser.add_argument('--item_ranking', type=str, default='10,20,40')
     
-    parser.add_argument('--max_epoch', type=int, default=500,
+    parser.add_argument('--max_epoch', type=int, default=200,
                         help='Max Epoch')
-    parser.add_argument('--batch_size', type=int, default=2048,
+    parser.add_argument('--batch_size', type=int, default=4096,
                         help='Batch size')
     parser.add_argument('--hyperedge_num', type=int, default=128,
                         help='Hyperedge num')
-    parser.add_argument('--batch_size_kg', type=int, default=8096,
+    parser.add_argument('--batch_size_kg', type=int, default=8192,
                         help='Batch size KG')
     parser.add_argument('--n_layers', type=int, default=2,
                         help='n_layers')
@@ -53,7 +56,7 @@ def parse_arguments():
                         help='Leaky')
     parser.add_argument('--drop_rate', type=float, default=0.2,
                         help='Drop rate')
-    parser.add_argument('--nheads', type=int, default=1,
+    parser.add_argument('--nheads', type=int, default=4,
                         help='Num of heads')
     parser.add_argument('--temp', type=float, default=10,
                         help='Contrastive rate')

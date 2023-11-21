@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import time 
 from base.graph_recommender import GraphRecommender
 from util.conf import OptionConf
 from util.sampler import next_batch_pairwise
@@ -42,7 +43,7 @@ class SGL(GraphRecommender):
         self.early_stopping_steps = int(kwargs['early_stopping_steps'])
         self.aug_type = 0
         
-    def train(self):
+    def train(self, load_pretrained):
         model = self.model.cuda()
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lRate, weight_decay=self.weight_decay)
         
@@ -52,6 +53,9 @@ class SGL(GraphRecommender):
         for epoch in range(self.maxEpoch):
             dropped_adj1 = model.graph_reconstruction()
             dropped_adj2 = model.graph_reconstruction()
+
+            s_train = time.time() 
+
             for n, batch in enumerate(next_batch_pairwise(self.data, self.batch_size)):
                 user_idx, pos_idx, neg_idx = batch
                 rec_user_emb, rec_item_emb = model()
@@ -67,17 +71,23 @@ class SGL(GraphRecommender):
                 optimizer.step()
                 if n % 100==0 and n>0:
                     print('training:', epoch + 1, 'batch', n, 'rec_loss:', rec_loss.item(), 'cl_loss', cl_loss.item())
+            
+            e_train = time.time() 
+            tr_time = e_train - s_train 
+
+
             with torch.no_grad():
                 self.user_emb, self.item_emb = self.model()
-                cur_data, data_ep =  self.fast_evaluation(epoch)
-                lst_performances.append(data_ep)
+                cur_data, data_ep =  self.fast_evaluation(epoch, train_time=tr_time)
                 
                 cur_recall =  float(cur_data[2].split(':')[1])
                 recall_list.append(cur_recall)
                 best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
                 if should_stop:
                     break 
-                
+            lst_performances.append(data_ep)
+
+        self.save_perfomance_training(lst_performances)
         self.user_emb, self.item_emb = self.best_user_emb, self.best_item_emb
 
     def save(self):

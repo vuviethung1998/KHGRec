@@ -22,6 +22,7 @@ class SHT(GraphRecommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
         GraphRecommender.__init__(self, conf, training_set, test_set, knowledge_set, **kwargs)
         self.reg_loss = EmbLoss() 
+        self.kwargs = kwargs 
         self.model = SHTEncoder(self.data, kwargs)
         self._parse_config(self.config, kwargs)
         self.model.to(device)
@@ -58,7 +59,7 @@ class SHT(GraphRecommender):
         sslLoss *= self.ss_rate
         return bprLoss, sslLoss
 
-    def train(self):
+    def train(self, load_pretrained=False):
         model = self.model 
         recall_list = []
         total_train_losses = []
@@ -66,43 +67,58 @@ class SHT(GraphRecommender):
         total_reg_losses = []
         lst_performances = []
 
-        for ep in range(self.maxEpoch):
-            train_losses = []
-            rec_losses = []
-            reg_losses = []
-            
-            for n, batch in enumerate(next_batch_pairwise(self.data, self.batch_size)):
-                user_idx, pos_idx, neg_idx = batch                
-                model.train()
-                bprLoss, sslLoss = model.calcLosses(user_idx, pos_idx, neg_idx)
-                regLoss = model.calcRegLoss(model) * self.reg
-                loss = bprLoss + regLoss + sslLoss
-                train_losses.append(loss.item())
-                self.optimizer.zero_grad()
-                loss.backward()                 
-                self.optimizer.step()
-            batch_train_loss = np.mean(train_losses)
-            batch_rec_loss = np.mean(rec_losses)
-            batch_reg_loss = np.mean(reg_losses)
-            
-            total_train_losses.append([ep, batch_train_loss])
-            total_rec_losses.append([ep, batch_rec_loss])
-            total_reg_losses.append([ep, batch_reg_loss])
-            self.scheduler.step(batch_train_loss)
-            
-            # Evaluation
+
+        if load_pretrained:
+            model.load_state_dict(torch.load(f"./results/{self.kwargs['model']}/{self.kwargs['dataset']}/model_full/{self.kwargs['model']}-weight.pth"))
             model.eval()
             with torch.no_grad():
                 _, self.user_emb, self.item_emb = model()
-                cur_data, data_ep = self.fast_evaluation(ep)
+                cur_data, data_ep = self.fast_evaluation(0, train_time=0)
                 lst_performances.append(data_ep)
+        else:
+            for ep in range(self.maxEpoch):
+                train_losses = []
+                rec_losses = []
+                reg_losses = []
+                s_train = time.time()
                 
-                cur_recall =  float(cur_data[2].split(':')[1])
-                recall_list.append(cur_recall)
-                best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
-                if should_stop:
-                    break 
-        # return hyperUEmbeds, hyperIEmbeds
+                for n, batch in enumerate(next_batch_pairwise(self.data, self.batch_size)):
+                    user_idx, pos_idx, neg_idx = batch                
+                    model.train()
+                    bprLoss, sslLoss = model.calcLosses(user_idx, pos_idx, neg_idx)
+                    regLoss = model.calcRegLoss(model) * self.reg
+                    loss = bprLoss + regLoss + sslLoss
+                    train_losses.append(loss.item())
+                    self.optimizer.zero_grad()
+                    loss.backward()                 
+                    self.optimizer.step()
+                
+                e_train = time.time() 
+                tr_time = e_train - s_train 
+
+                batch_train_loss = np.mean(train_losses)
+                batch_rec_loss = np.mean(rec_losses)
+                batch_reg_loss = np.mean(reg_losses)
+                
+                total_train_losses.append([ep, batch_train_loss])
+                total_rec_losses.append([ep, batch_rec_loss])
+                total_reg_losses.append([ep, batch_reg_loss])
+                self.scheduler.step(batch_train_loss)
+                
+                # Evaluation
+                model.eval()
+                with torch.no_grad():
+                    _, self.user_emb, self.item_emb = model()
+                    cur_data, data_ep = self.fast_evaluation(ep, train_time=tr_time)
+                    lst_performances.append(data_ep)
+                    
+                    cur_recall =  float(cur_data[2].split(':')[1])
+                    recall_list.append(cur_recall)
+                    best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
+                    if should_stop:
+                        break 
+            # return hyperUEmbeds, hyperIEmbeds
+        self.save_perfomance_training(lst_performances)
         self.user_emb, self.item_emb = self.best_user_emb, self.best_item_emb
 
     def save(self):

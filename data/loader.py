@@ -26,9 +26,13 @@ class FileIO(object):
         with open(file) as f:
             next(f)
             for line in f:
-                items = split('\t', line.strip())
+                if '\t' not in line:
+                    items = split(',', line.strip())
+                else:
+                    items = split('\t', line.strip())
                 user_id = int(items[0])
                 item_id = int(items[1])
+
                 weight = 1
                 data.append([user_id, item_id, float(weight)])
         return data

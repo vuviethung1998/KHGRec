@@ -1,2 +1,0 @@
-CUDA_VISIBLE_DEVICES=0,1 python main.py  --model=HGNN --dataset=alibaba-fashion --lrate=0.0001 \
-    --weight_decay=5e-7 --drop_rate=0.1 --p=0.3 --cl_rate=0.01 --temp=0.1 --reg=0.001 --early_stopping_steps=50

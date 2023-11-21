@@ -1,0 +1,3 @@
+python main.py  --model=HGNN --n_layers=2 --dataset=ml-1m --lrate=0.001 --weight_decay=5e-05 --drop_rate=0.3 --p=0.3 --cl_rate=0.001 --temp=0.1 --reg=0.1 --early_stopping_steps=50 --seed=12
+python main.py  --model=HGNN --n_layers=2 --dataset=ml-1m --lrate=0.001 --weight_decay=5e-05 --drop_rate=0.3 --p=0.3 --cl_rate=0.0001 --temp=0.1 --reg=0.1 --early_stopping_steps=50 --seed=12
+python main.py  --model=HGNN --n_layers=2 --dataset=ml-1m --lrate=0.001 --weight_decay=5e-05 --drop_rate=0.3 --p=0.3 --cl_rate=0.00001 --temp=0.1 --reg=0.1 --early_stopping_steps=50 --seed=12

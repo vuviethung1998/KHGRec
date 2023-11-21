@@ -1,2 +1,0 @@
-CUDA_VISIBLE_DEVICES=0,1 python main.py --model=KGAT --dataset=lastfm --lrate=0.01 \
-            --reg=0.1 --weight_decay=1e-6 --p=0.3 --drop_rate=0.2 --n_layers=2 --early_stopping_steps=20 --gpu_id=1 --max_epoch=500

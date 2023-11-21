@@ -62,11 +62,15 @@ class HCCF(GraphRecommender):
         sslLoss *= self.ss_rate
         return bprLoss, sslLoss
 
-    def train(self):
+    def train(self, load_pretrained=False):
         model = self.model 
         recall_list = []
         train_losses = [] 
+        lst_performances = []
+
         for ep in range(self.maxEpoch):
+            s_train = time.time()
+
             for n, batch in enumerate(next_batch_pairwise(self.data, self.batchSize)):
                 user_idx, pos_idx, neg_idx = batch
                 model.train()
@@ -86,14 +90,18 @@ class HCCF(GraphRecommender):
                 batch_loss.backward()
                 self.optimizer.step()
 
+            e_train = time.time() 
+            tr_time = e_train - s_train 
+            
             model.eval()
             with torch.no_grad():
                 self.user_emb, self.item_emb, _, _ = model(keep_rate=1)
                 s_eval = time.time()
-                if ep >= 1:
-                    data_ep, _ = self.fast_evaluation(ep)
+                if ep >= 0:
+                    cur_data, data_ep = self.fast_evaluation(ep, train_time=tr_time)
+                    lst_performances.append(data_ep)
                     print(data_ep)
-                    cur_recall =  float(data_ep[2].split(':')[1])
+                    cur_recall =  float(cur_data[2].split(':')[1])
                     recall_list.append(cur_recall)
                     best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
                     if should_stop:
@@ -104,6 +112,8 @@ class HCCF(GraphRecommender):
 
             e_eval = time.time()
             print("Eval time: %f s" % (e_eval - s_eval))
+
+        self.save_perfomance_training(lst_performances)
         self.user_emb, self.item_emb = self.best_user_emb, self.best_item_emb
 
     def save(self):

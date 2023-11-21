@@ -32,7 +32,7 @@ class Interaction(Data,Graph):
 
         self.ui_adj = self.__create_sparse_bipartite_adjacency()
         self.norm_adj = self.normalize_graph_mat(self.ui_adj)
-        
+
         self.edge_index, self.edge_index_t, self.interaction_mat, self.inv_interaction_mat = self.__create_sparse_interaction_matrix()
         self.norm_interaction_mat = self.normalize_graph_mat(self.interaction_mat)
         self.norm_inv_interaction_mat = self.normalize_graph_mat(self.inv_interaction_mat)
@@ -196,7 +196,7 @@ class InteractionKG(Data, Graph):
         self.training_set_i = defaultdict(dict)
         self.test_set = defaultdict(dict)
         self.user_history_dict = defaultdict(dict)
-
+        
         self.test_set_item = set()
         self.__generate_set()
 

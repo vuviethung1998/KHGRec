@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np 
 import pandas as pd 
+import time 
 
 from base.graph_recommender import GraphRecommender
 from util.conf import OptionConf
@@ -40,7 +41,7 @@ class DHCF(GraphRecommender):
         self.weight_decay =float(kwargs['weight_decay'])
         self.early_stopping_steps = int(kwargs['early_stopping_steps'])
         
-    def train(self):
+    def train(self, load_pretrained):
         model = self.model.cuda()
         optimizer = torch.optim.Adam(model.parameters(), lr=self.lRate, weight_decay=self.weight_decay)
         scheduler = ReduceLROnPlateau(optimizer, 'min', factor=self.lr_decay, patience=5)
@@ -56,6 +57,8 @@ class DHCF(GraphRecommender):
             rec_losses = []
             reg_losses = []
             
+            s_train = time.time()
+
             for n, batch in enumerate(next_batch_pairwise(self.data, self.batch_size)):
                 user_idx, pos_idx, neg_idx = batch
                 rec_user_emb, rec_item_emb = model()
@@ -76,6 +79,9 @@ class DHCF(GraphRecommender):
                 if n % 100==0 and n>0:
                     print('training:', epoch + 1, 'batch', n, 'batch_loss:', batch_loss.item())
             
+            e_train = time.time() 
+            tr_time = e_train - s_train 
+
             train_loss = np.mean(train_losses)
             rec_loss = np.mean(rec_losses)
             reg_loss = np.mean(reg_losses)
@@ -87,7 +93,7 @@ class DHCF(GraphRecommender):
 
             with torch.no_grad():
                 self.user_emb, self.item_emb = model()
-                cur_data, data_ep = self.fast_evaluation(epoch)
+                cur_data, data_ep = self.fast_evaluation(epoch, train_time=tr_time)
                 lst_performances.append(data_ep)
                 
                 cur_recall =  float(cur_data[2].split(':')[1])

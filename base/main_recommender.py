@@ -28,9 +28,18 @@ class GraphRecommender(Recommender):
         
         self.dataset = kwargs['dataset']
         
-        model_name = "HGNN_KG_SSL_Attention"
+        model_name = kwargs['model']
         if kwargs['mode'] == 'full':
-            self.output = f"./results/{model_name}/{self.dataset}/@{self.model_name}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-bs:{self.batch_size}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-weight_decay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-cl_rate:{kwargs['cl_rate']}-temp:{kwargs['temp']}/"
+            exp = kwargs['experiment']
+            if exp == 'cold_start':
+                exp_name = f"cold_start_{kwargs['group_id']}"
+            elif exp == 'missing':
+                exp_name = f"missing_{kwargs['missing_pct']}"
+            elif exp == 'add_noise':
+                exp_name = f"add_noise_{kwargs['noise_pct']}"
+            else:
+                exp_name = 'full'
+            self.output =  f"./results/{kwargs['model']}/{kwargs['dataset']}/{exp_name}/@{self.model_name}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-bs:{self.batch_size}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-weight_decay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-cl_rate:{kwargs['cl_rate']}-temp:{kwargs['temp']}/"
         else:
             self.output = f"./results/{model_name}/ablation/{kwargs['mode']}/{self.dataset}/@{self.model_name}-inp_emb:{kwargs['input_dim']}-hyper_emb:{kwargs['hyper_dim']}-bs:{self.batch_size}-lr:{kwargs['lrate']}-lrd:{kwargs['lr_decay']}-weight_decay:{kwargs['weight_decay']}-reg:{kwargs['reg']}-leaky:{kwargs['p']}-dropout:{kwargs['drop_rate']}-n_layers:{kwargs['n_layers']}-cl_rate:{kwargs['cl_rate']}-temp:{kwargs['temp']}/"
         if not os.path.exists(self.output):
@@ -165,7 +174,7 @@ class GraphRecommender(Recommender):
         print('*Best Performance* ')
         print('Epoch:fast_evaluation', str(self.bestPerformance[0]) + ',', bp)
         print('-' * 120)
-        return measure
+        return (e_test - s_test), measure
     
     def save(self, model, best_user_emb, best_item_emb):
         self.best_user_emb, self.best_item_emb = best_user_emb, best_item_emb
@@ -179,7 +188,7 @@ class GraphRecommender(Recommender):
         weight_file = out_dir + '/' + file_name 
         torch.save(model.state_dict(), weight_file)
         
-    def save_performance_row(self, ep, data_ep):
+    def save_performance_row(self, ep, time_train, time_test, data_ep):
         # opening the csv file in 'w' mode
         csv_path = self.output + 'train_performance.csv'
         
@@ -190,11 +199,13 @@ class GraphRecommender(Recommender):
         ndcg = float(data_ep[3].split(':')[1])
         
         with open(csv_path, 'a+', newline = '') as f:
-            header = ['ep', 'hit@20', 'prec@20', 'recall@20', 'ndcg@20']
+            header = ['ep', 'training_time', 'testing_time','hit@20', 'prec@20', 'recall@20', 'ndcg@20']
             writer = csv.DictWriter(f, fieldnames = header)
             # writer.writeheader()
             writer.writerow({
                  'ep' : ep,
+                 'training_time': time_train,
+                 'testing_time': time_test, 
                  'hit@20': hit,
                  'prec@20': precision,
                  'recall@20': recall,

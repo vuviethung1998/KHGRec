@@ -9,6 +9,7 @@ from time import strftime, localtime, time
 class Recommender(object):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
         self.config = conf
+        self.experiment = kwargs['experiment']
         self.data = Data(self.config, training_set, test_set)
         self.model_name = self.config['model.name']
         self.ranking = kwargs['item_ranking']
@@ -62,7 +63,7 @@ class Recommender(object):
         pass
 
     def predict(self, u):
-        pass
+        pass    
 
     def test(self):
         pass
@@ -81,17 +82,33 @@ class Recommender(object):
         self.print_model_info()
         print('Initializing and building model...')
         self.build()
-        if self.model_name in ['KGAT']:
-            print('Training Model...')
-            user_embed, item_embed = self.train()
-            print('Testing...')
-            rec_list = self.test(user_embed, item_embed)
-            print('Evaluating...')
-            self.evaluate(rec_list)
+        if self.experiment == 'cold_start':
+            if self.model_name in ['KGAT']:
+                print('Training Model...')
+                user_embed, item_embed = self.train(load_pretrained=False)
+                print('Testing...')
+                rec_list = self.test(user_embed, item_embed)
+                print('Evaluating...')
+                self.evaluate(rec_list)
+            else:
+                print('Training Model...')
+                self.train(load_pretrained=False)
+                print('Testing...')
+                rec_list = self.test()
+                print('Evaluating...')
+                self.evaluate(rec_list) 
         else:
-            print('Training Model...')
-            self.train()
-            print('Testing...')
-            rec_list = self.test()
-            print('Evaluating...')
-            self.evaluate(rec_list)
+            if self.model_name in ['KGAT']:
+                print('Training Model...')
+                user_embed, item_embed = self.train(load_pretrained=False)
+                print('Testing...')
+                rec_list = self.test(user_embed, item_embed)
+                print('Evaluating...')
+                self.evaluate(rec_list)
+            else:
+                print('Training Model...')
+                self.train(load_pretrained=False)
+                print('Testing...')
+                rec_list = self.test()
+                print('Evaluating...')
+                self.evaluate(rec_list)
