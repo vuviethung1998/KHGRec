@@ -20,7 +20,7 @@ from base.torch_interface import TorchGraphInterface
 from util.loss_torch import L2_loss_mean
 from util.evaluation import early_stopping
 
-device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class KGAT(KGGraphRecommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
@@ -153,7 +153,9 @@ class KGAT(KGGraphRecommender):
             
             self.save_performance_row(ep, (train_e_t - train_s_t), test_t, data_ep)
             self.save_loss_row([ep, train_loss, cf_loss, kg_loss])
-        
+            
+            data_ep.append(train_e_t - train_s_t)
+            data_ep.append( test_t)
             lst_performances.append(data_ep)
             lst_train_losses.append([ep, train_loss]) 
             lst_rec_losses.append([ep, cf_loss])

@@ -223,7 +223,7 @@ class KGGraphRecommender(Recommender):
     
     def save_perfomance_training(self, log_train):
         df_train_log = pd.DataFrame(log_train)
-        df_train_log.to_csv(self.output_path + '/train_performance.csv')
+        df_train_log.to_csv(self.output_path + '/performance.csv')
 
 def test(data, data_kg, user_emb, item_emb, max_N):
     def process_bar(num, total):
