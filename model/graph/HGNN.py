@@ -11,6 +11,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import numpy as np
 import random 
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
+import time
 
 from util.loss_torch import bpr_loss, l2_reg_loss, contrastLoss
 from util.init import *
@@ -105,6 +106,8 @@ class HGNN(GraphRecommender):
             relations = list(self.data_kg.laplacian_dict.keys())
 
             train_model.train()
+            s_train = time.time()
+            
             for n, batch in enumerate(next_batch_unified(self.data, self.data_kg, self.batchSize, self.batchSizeKG, device=self.device)):
                 user_idx, pos_idx, neg_idx, kg_batch_head, kg_batch_relation, kg_batch_pos_tail, kg_batch_neg_tail = batch
                 # train KG
@@ -163,7 +166,10 @@ class HGNN(GraphRecommender):
 
             cf_loss = np.mean(cf_losses)
             kg_loss = np.mean(kg_losses)
-
+            
+            e_train = time.time() 
+            train_time = e_train - s_train
+                
             if self.use_contrastive:
                 cl_loss = np.mean(cl_losses)
                 train_loss = cf_loss + kg_loss + cl_loss 
@@ -190,8 +196,8 @@ class HGNN(GraphRecommender):
                 item_emb, _ = self.attention_item(torch.stack([item_emb_cf, item_emb_kg], dim=1))
                 
                 self.user_emb, self.item_emb = user_emb_cf, item_emb
-                data_ep = self.fast_evaluation(ep, train_model)
-            
+                test_time, data_ep = self.fast_evaluation(ep, train_model)
+                
                 cur_recall =  float(data_ep[2].split(':')[1])
                 recall_list.append(cur_recall)
                 best_recall, should_stop = early_stopping(recall_list, self.early_stopping_steps)
@@ -199,7 +205,7 @@ class HGNN(GraphRecommender):
                 if should_stop:
                     break 
 
-            self.save_performance_row(ep, data_ep)
+            self.save_performance_row(ep, train_time, test_time, data_ep)
             self.save_loss_row([ep, train_loss, cf_loss, kg_loss, cl_loss])
             lst_performances.append(data_ep)
 
