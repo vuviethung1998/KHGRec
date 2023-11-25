@@ -81,7 +81,7 @@ class HGNN(GraphRecommender):
         os.environ["PYTHONHASHSEED"] = str(seed)
         print(f"Random seed set as {seed}")
 
-    def train(self):
+    def train(self, load_pretrained=False):
         print("start training")
         train_model = self.model 
         lst_train_losses = []
@@ -166,10 +166,10 @@ class HGNN(GraphRecommender):
 
             cf_loss = np.mean(cf_losses)
             kg_loss = np.mean(kg_losses)
-            
+
             e_train = time.time() 
             train_time = e_train - s_train
-
+            
             if self.use_contrastive:
                 cl_loss = np.mean(cl_losses)
                 train_loss = cf_loss + kg_loss + cl_loss 
@@ -385,9 +385,9 @@ class SelfAwareEncoder(nn.Module):
         self.lns = torch.nn.ModuleList()
 
         for i in range(self.layers):
-            encoder_layers = TransformerEncoderLayer(d_model=hyper_size, nhead=2, dim_feedforward=32, dropout=drop_rate) # Default batch_first=False (seq, batch, feature)
+            encoder_layers = TransformerEncoderLayer(d_model=hyper_size, nhead=1, dim_feedforward=32, dropout=drop_rate) # Default batch_first=False (seq, batch, feature)
             enc_norm = nn.LayerNorm(hyper_size)
-            self.ugformer_layers.append(TransformerEncoder(encoder_layers, 2, norm=enc_norm).to(device))
+            self.ugformer_layers.append(TransformerEncoder(encoder_layers, 1, norm=enc_norm).to(device))
             self.hgnn_layers.append(HGCNConv(leaky=leaky))
             self.lns.append(torch.nn.LayerNorm(hyper_size))
 
@@ -416,6 +416,7 @@ class RelationalAwareEncoder(nn.Module):
         self.leaky = leaky 
         self.dropout = dropout 
         self.n_layers = n_layers
+        self.act = nn.LeakyReLU(self.leaky)
         self.convs = torch.nn.ModuleList()
         self.lns = torch.nn.ModuleList()
         for i in range(n_layers):
@@ -437,7 +438,7 @@ class AttHGCNConv(nn.Module):
         self.act = nn.LeakyReLU(negative_slope=leaky)
 
     def forward(self, inp_adj, att_adj, embs, act=True):
-        adj = torch.sparse.mm(att_adj,inp_adj)
+        # adj = torch.sparse.mm(att_adj,inp_adj)
         adj = inp_adj 
         if act:
             return self.act(torch.sparse.mm(adj,  torch.sparse.mm(adj.t(), embs)))

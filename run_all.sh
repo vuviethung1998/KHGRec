@@ -1,2 +1,1 @@
-python main.py --model=KGAT --dataset=lastfm --lrate=0.005 --reg=0.1 --weight_decay=1e-6 --p=0.3 --drop_rate=0.2 --n_layers=2 --early_stopping_steps=20 --gpu_id=0 --max_epoch=200   --max_epoch=10 --batch_size=1024 --batch_size_kg=1024  
-python main.py --model=KGAT --dataset=ml-1m --lrate=0.005 --reg=0.1 --weight_decay=1e-6 --p=0.3 --drop_rate=0.2 --n_layers=2 --early_stopping_steps=20 --gpu_id=0 --max_epoch=200   --max_epoch=10  --batch_size=1024 --batch_size_kg=1024
+CUDA_VISIBLE_DEVICES=1 python main.py --model=HGNN --dataset=lastfm  --lrate=0.0001 --weight_decay=5e-6 --drop_rate=0.2 --p=0.3 --cl_rate=0.0001 --temp=0.2 --reg=0.1 --early_stopping_steps=50
