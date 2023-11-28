@@ -25,7 +25,7 @@ def parse_arguments():
                         help='Lrate')
     parser.add_argument('--item_ranking', type=str, default='10,20,40')
     
-    parser.add_argument('--max_epoch', type=int, default=200,
+    parser.add_argument('--max_epoch', type=int, default=500,
                         help='Max Epoch')
     parser.add_argument('--batch_size', type=int, default=4096,
                         help='Batch size')
