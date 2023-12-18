@@ -59,7 +59,7 @@ def parse_arguments():
     parser.add_argument('--nheads', type=int, default=4,
                         help='Num of heads')
     parser.add_argument('--temp', type=float, default=10,
-                        help='Contrastive rate')
+                        help='Temperature term')
     parser.add_argument('--cl_rate', type=float, default=0.01,
                         help='Contrastive rate')
     # parser.add_argument('--use_contrastive', action='store_true',

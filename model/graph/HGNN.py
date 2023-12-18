@@ -366,7 +366,7 @@ class HGNNModel(nn.Module):
         return sslLoss
 
 class SelfAwareEncoder(nn.Module):
-    def __init__(self, data, emb_size, hyper_size, n_layers, leaky, drop_rate, device, use_self_att=True):
+    def __init__(self, data, emb_size, hyper_size, n_layers, leaky, drop_rate, device, use_self_att=False):
         super(SelfAwareEncoder, self).__init__()
         self.data = data
         self.latent_size = emb_size
