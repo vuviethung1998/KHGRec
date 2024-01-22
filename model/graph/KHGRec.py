@@ -12,7 +12,7 @@ from base.torch_interface import TorchGraphInterface
 from util.loss_torch import bpr_loss,l2_reg_loss
 from util.evaluation import early_stopping
 
-class HGCN(GraphRecommender):
+class KHGRec(GraphRecommender):
     def __init__(self, conf, training_set, test_set, knowledge_set, **kwargs):
         super(HGCN, self).__init__(conf, training_set, test_set, knowledge_set, **kwargs)
         self.device = torch.device(f"cuda:{kwargs['gpu_id']}" if torch.cuda.is_available() else 'cpu')
