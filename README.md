@@ -26,7 +26,7 @@ To train the model from scratch with the default setting
 
 **LastFM**
 ```
-python main.py --model=HGNN --dataset=lastfm  --lrate=0.0001 --weight_decay=5e-6 --drop_rate=0.2 --p=0.3 --cl_rate=1e-05 --temp=0.2 --reg=0.1 --early_stopping_steps=20
+python main.py --model=KHGRec --dataset=lastfm  --lrate=0.0001 --weight_decay=5e-6 --drop_rate=0.2 --p=0.3 --cl_rate=1e-05 --temp=0.2 --reg=0.1 --early_stopping_steps=20
 ```
 
 ## Parameters 
