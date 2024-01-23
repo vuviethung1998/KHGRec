@@ -96,11 +96,8 @@ def parse_arguments():
 
 if __name__ == '__main__':
     # Register your model here
-    graph_baselines = ['LightGCN','DirectAU','MF','SASRec', 'KGAT', 'HGCN', 'KHGRec', 'DHCF']
-    ssl_graph_models = ['SGL', 'SimGCL', 'SEPT', 'MHCN', 'BUIR', 'SelfCF', 'SSL4Rec', 'XSimGCL', 'NCL',\
-                        'MixGCF', 'HKGRippleNet', 'HGNN', 'HGNNAblation', 'HCCF', 'SHT']
-    sequential_baselines= ['SASRec']
-    ssl_sequential_models = ['CL4SRec']
+    graph_baselines = ['LightGCN', 'KGAT', 'HGCN', 'KHGRec', 'DHCF']
+    ssl_graph_models = ['SGL', 'HCCF', 'SHT']
 
     args = parse_arguments()
 
@@ -114,20 +111,14 @@ if __name__ == '__main__':
     print('Self-Supervised  Graph-Based Models:')
     print('   '.join(ssl_graph_models))
     print('=' * 80)
-    print('Sequential Baseline Models:')
-    print('   '.join(sequential_baselines))
-    print('-' * 100)
-    print('Self-Supervised Sequential Models:')
-    print('   '.join(ssl_sequential_models))
-    print('=' * 80)
-
+   
     model = args.model
     dataset = args.dataset
 
     dict_args = namespace_to_dict(args)
 
     s = time.time()
-    if model in graph_baselines or model in ssl_graph_models or model in sequential_baselines or model in ssl_sequential_models:
+    if model in graph_baselines or model in ssl_graph_models:
         conf = ModelConf('./conf/' + model + '.conf')
         conf.config['dataset'] = dataset
     else:
