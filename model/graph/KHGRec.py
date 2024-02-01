@@ -438,7 +438,6 @@ class AttHGCNConv(nn.Module):
 
     def forward(self, inp_adj, att_adj, embs, act=True):
         adj = torch.sparse.mm(att_adj,inp_adj)
-        adj = inp_adj 
         if act:
             return self.act(torch.sparse.mm(adj,  torch.sparse.mm(adj.t(), embs)))
         else:
