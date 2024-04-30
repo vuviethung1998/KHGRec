@@ -13,21 +13,20 @@ def parse_arguments():
     # Add the arguments
     parser.add_argument('--model', type=str, default='HCCF',
                         help='Model name')
-    parser.add_argument('--gpu_id', type=int, default=0,
+    parser.add_argument('--gpu_id', type=int, default=1,
                         help='GPU')
-    parser.add_argument('--dataset', type=str, default='lastfm', choices=['lastfm', 'alibaba-fashion', 'ml-1m'],
+    parser.add_argument('--dataset', type=str, default='lastfm', choices=['mind-f', 'lastfm', 'alibaba-fashion', 'ml-1m'],
                         help='Dataset name')
     parser.add_argument('--seed', type=int, default=60,
                         help='seed')
     parser.add_argument('--alpha', type=float, default=1,
                         help='KG loss pct')
-    parser.add_argument('--lrate', type=float, default=0.001,
+    parser.add_argument('--lrate', type=float, default=0.005,
                         help='Lrate')
     parser.add_argument('--item_ranking', type=str, default='10,20,40')
-    
     parser.add_argument('--max_epoch', type=int, default=500,
                         help='Max Epoch')
-    parser.add_argument('--batch_size', type=int, default=4096,
+    parser.add_argument('--batch_size', type=int, default=8192,
                         help='Batch size')
     parser.add_argument('--hyperedge_num', type=int, default=128,
                         help='Hyperedge num')
@@ -35,7 +34,7 @@ def parse_arguments():
                         help='Batch size KG')
     parser.add_argument('--n_layers', type=int, default=2,
                         help='n_layers')
-    parser.add_argument('--embedding_size', type=int, default=32,
+    parser.add_argument('--embedding_size', type=int, default=128,
                         help='Embedding size')
     parser.add_argument('--input_dim', type=int, default=32,
                         help='Input dim')
@@ -82,7 +81,7 @@ def parse_arguments():
     parser.add_argument('--mess_dropout', nargs='?', default='[0.1, 0.1, 0.1]',
                         help='Dropout probability w.r.t. message dropout for each deep layer. 0: no dropout.')
 
-    parser.add_argument('--early_stopping_steps', type=int, default=30,
+    parser.add_argument('--early_stopping_steps', type=int, default=5,
                         help='Early stop.')
     parser.add_argument('--cf_print_every', type=int, default=1,
                         help='Iter interval of printing CF loss.')
